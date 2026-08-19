@@ -244,6 +244,7 @@ Embed in HTML:
 
 ---
 ##Thank you & Acknowledgment
+
 **Our Lead Developer for this project**: Molor Davaa (@UchihaMolsyh)
 - Thank you for developing this project solo and making it this far.
 ---
