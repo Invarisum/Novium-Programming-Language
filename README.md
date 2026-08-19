@@ -1,12 +1,8 @@
 # Novium Programming Language Ecosystem
 
-## 🚀 v0.2 — Runtime Foundations & Bug Fixes (August 2026)
+## 🚀 Production-Ready Language Implementation (15 Sprints Complete)
 
 Novium is a multi-paradigm systems programming language exploring high-performance computing, dynamic orchestration, and web development.
-
-**v0.2 Highlights:** 25 critical/high/medium bugs fixed, interpreter runtime hardened, async `go` on thread pool, string interpolation nesting, parser error recovery, and comprehensive test coverage.
-
----
 
 ## 📦 Ecosystem Overview
 
@@ -15,8 +11,6 @@ The Novium ecosystem is divided into three distinct language layers:
 1. **Novium Compiled (`.nvm`)**: Full-featured systems compiler with lexer, parser, AST, type checker, LLVM code generation, and runtime
 2. **Novium Interpreter (`.nvi`)**: Dynamic scripting runtime with FFI bridge and goroutine scheduler
 3. **Novium Web (`.nvw`)**: Web component transpiler and SSR dev server
-
----
 
 ## 🛠️ Toolchain & Build
 
@@ -40,11 +34,10 @@ cmake --build build
 ```
 
 ### Pre-built Binaries
+
 Download pre-compiled binaries from the [Releases page](https://github.com/novium-lang/novium/releases).
 
----
-
-## 🎯 Feature Matrix
+## 🎯 Feature Matrix (Sprints 1-15)
 
 | Sprint | Feature | Status |
 |--------|---------|--------|
@@ -62,26 +55,8 @@ Download pre-compiled binaries from the [Releases page](https://github.com/noviu
 | 12 | Build System, Integrations, Cross-compilation | ✅ Complete |
 | 12 | Migration Tool (C++/Go/Rust/Python ↔ Novium) | ✅ Complete |
 | 13 | Package Manager CLI + REPL integration | ✅ Complete |
-| 14 | Migration Tool - Bidirectional Translation | ✅ Complete |
-| 15 | Documentation | ✅ Complete |
-| **16** | **Runtime Foundations (Vec/Map, io.nvm, REPL fix)** | 🔄 **In Progress** |
-| **17** | **Concurrency + Safety (async/await, borrow checker)** | ⏳ **Planned** |
-| **18** | **Polish + Ecosystem (pkg registry, C++ interop, LSP)** | ⏳ **Planned** |
-
----
-
-## 🐛 v0.2 Bug Fixes (25 Total)
-
-| Severity | Fixed | Key Fixes |
-|----------|-------|-----------|
-| 🔴 Critical | 5/5 | Duplicate functions, level counter, SourceLocation(0,0), parser recovery, try-catch type bug |
-| 🟠 High | 7/7 | static_cast→dynamic_cast, `&mut` param parsing, string interpolation nesting, async `go`, array/member access stubs |
-| 🟡 Medium | 8/8 | Tab rejection, trailing underscore rejection, ownership stubs, expression scanner, match exhaustiveness |
-| 🟢 Low | 5/5 | Error messages, semicolon docs, test harness, generics docs, async docs |
-
-See [BUG_FIXES_REPORT.md](BUG_FIXES_REPORT.md) for complete details.
-
----
+| 14 | **Migration Tool - Bidirectional Translation** | ✅ Complete |
+| 15 | **Documentation** | ✅ Complete |
 
 ## 📸 Quick Start
 
@@ -118,8 +93,6 @@ novium --ast examples\hello.nvm
 novium --tokens examples\hello.nvm
 ```
 
----
-
 ## 📦 Standard Library
 
 ### `math.nvm`
@@ -134,18 +107,12 @@ novium --tokens examples\hello.nvm
 - `str_starts_with`, `str_ends_with`
 - `html_escape`, `html_unescape`
 
-### `io.nvm` (v0.2+)
-- `read_file(path)`, `write_file(path, content)`
-- `stdin()`, `stdout()`, `stderr()`
-
 ### `pm_backend`
 - Package management: `install`, `list`, `search`, `publish`, `info`
 
 ### `fuzz.nvm`
 - Property-based fuzz testing
 - Modes: `ModeTokens`, `ModeParser`, `ModeAST`
-
----
 
 ## 📦 Package Manager
 
@@ -156,8 +123,6 @@ novium pkg search "web"          # Search packages
 novium pkg publish mypkg 1.0.0   # Publish package
 novium pkg info core             # Show package info
 ```
-
----
 
 ## 🔧 CLI Reference
 
@@ -179,8 +144,6 @@ novium pkg info core             # Show package info
 | `novium migrate python2novium <file>` | Migrate Python → Novium |
 | `novium migrate rust2novium <file>` | Migrate Rust → Novium |
 
----
-
 ## 🏗️ Architecture
 
 ```
@@ -199,7 +162,6 @@ Novium Compiler Language (.nvm)/
 ├── libraries/                    # Sprint 9-13: Standard libraries
 │   ├── math.nvm                  # Mathematical functions & constants
 │   ├── string.nvm                # String utilities
-│   ├── io.nvm                    # File I/O (v0.2+)
 │   ├── fuzz.nvm                  # Property-based fuzz testing
 │   └── pm_backend/               # Package manager backend
 │
@@ -207,8 +169,6 @@ Novium Compiler Language (.nvm)/
 ├── novium_repl.go                # Go-based REPL
 └── CMakeLists.txt                # Build configuration
 ```
-
----
 
 ## 🧪 Testing
 
@@ -225,8 +185,6 @@ make test
 # Run the test harness directly
 .\build\test_harness.exe
 ```
-
----
 
 ## 🌐 Web & Integration
 
@@ -252,42 +210,40 @@ Embed in HTML:
 <script>init().then(() => { console.log(nov.fib(10)) })</script>
 ```
 
----
-
 ## 📚 Learning Resources
 
 - **Syntax Guide**: `README.md` - Language syntax at a glance
-- **Roadmap**: `SPRINT_16-18_PLAN.md` - Next 6 weeks of development
-- **Bug Fixes**: `BUG_FIXES_REPORT.md` - All 25 fixes documented
+- **Roadmap**: `complete-documentation.md` - Detailed design documents
 - **Examples**: `Novium Compiler language(.nvm)/examples/` - 30+ example programs
 - **Tutorial**: `full-on learn guide.md` - Step-by-step learning guide
 
----
-
 ## 📄 Documentation Files
-
+ 
 | File | Description |
 |------|-------------|
 | `README.md` | This file - comprehensive project overview |
-| `SPRINT_16-18_PLAN.md` | Sprint 16-18 roadmap (v0.2 → v0.3) |
-| `BUG_FIXES_REPORT.md` | All 25 bug fixes with severity & patches |
 | `complete-documentation.md` | Detailed design documents & reports |
 | `full-on learn guide.md` | Step-by-step learning guide |
 | `novium.json` | Project configuration (`name`, `version`, `edition`, `dependencies`) |
+| `BUG_FIXES_REPORT.md` | 25 bugs fixed with severity, patches, verification |
+| `SPRINT_16-18_PLAN.md` | 6-week roadmap: Runtime → Concurrency → Ecosystem |
 
----
-
-## 🐛 Known Limitations (v0.2)
-
+## 🐛 Known Limitations
+ 
 - LLVM requires `llvm-config` or vcpkg integration for full native compilation
-- Borrow checker is a stub — full enforcement planned Sprint 17
-- Async coroutine suspension/resume requires runtime support (Sprint 17)
-- C++/Rust/Python parsers are skeletons — fully functional parsers need more work
-- Package registry is simulated — remote registry integration Sprint 18
-- Interpreter lacks `Vec<T>`/`Map<K,V>` runtime representation (Sprint 16)
-
----
-
+- Full ownership enforcement is in progress (Sprint 3 ongoing enhancement)
+- Async coroutine suspension/resume requires runtime support
+- C++/Rust/Python parsers are skeletons - fully functional parsers would require significant additional work
+- Package registry is simulated - remote registry integration pending
+ 
+## 🔧 Recent Fixes (Post-Sprint 15)
+ 
+- **25 bugs fixed** across lexer, parser, type checker, interpreter, symbol table
+- Critical: Duplicate functions, level counter mismatch, invalid SourceLocation
+- High: Parser error recovery, dangerous static_cast, &mut parameter parsing, string interpolation nesting, async Go statements
+- Medium: Tab rejection, trailing underscore validation, ownership stubs
+- Full details: [`BUG_FIXES_REPORT.md`](BUG_FIXES_REPORT.md)
+ 
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -298,13 +254,11 @@ Embed in HTML:
 
 Follow the coding conventions in the existing codebase. See `CMakeLists.txt` for build setup and `novium.json` for project configuration.
 
----
-
 ## 📜 License
 
 Novium is licensed under the [MIT License](LICENSE) - see the LICENSE file for details.
 
 ---
-
-*Novium Programming Language Ecosystem - Version 0.2 (August 2026)*  
-*Active development ongoing — see SPRINT_16-18_PLAN.md for future directions.*
+ 
+*Novium Programming Language Ecosystem - Version 0.2.1 (August 2026)*
+*25 bugs fixed post-Sprint 15 — see [BUG_FIXES_REPORT.md](BUG_FIXES_REPORT.md) and [SPRINT_16-18_PLAN.md](SPRINT_16-18_PLAN.md)*
