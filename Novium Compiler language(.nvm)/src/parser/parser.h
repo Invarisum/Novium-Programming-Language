@@ -83,6 +83,27 @@ private:
     std::unique_ptr<Stmt> parse_return_stmt();
     std::unique_ptr<Stmt> parse_try_catch_stmt();
     std::unique_ptr<Stmt> parse_go_stmt();
+    std::unique_ptr<Stmt> parse_defer_stmt();
+    std::unique_ptr<Stmt> parse_unsafe_block();
+    std::unique_ptr<Stmt> parse_panic_stmt();
+    std::unique_ptr<Stmt> parse_pass_stmt();
+    std::unique_ptr<Stmt> parse_raise_stmt();
+    std::unique_ptr<Stmt> parse_python_ffi_block();
+    std::unique_ptr<Stmt> parse_pub_decl();
+    std::unique_ptr<Stmt> parse_struct_decl();
+    std::unique_ptr<Stmt> parse_enum_decl();
+    std::unique_ptr<Stmt> parse_using_decl();
+    std::unique_ptr<Stmt> parse_with_stmt();
+    std::unique_ptr<Expr> parse_cast_expr();
+    std::unique_ptr<Expr> parse_sizeof_expr();
+    std::unique_ptr<Expr> parse_alignof_expr();
+    std::unique_ptr<Stmt> parse_tensor_type();
+    std::unique_ptr<Stmt> parse_matrix_type();
+    std::unique_ptr<Expr> parse_jsx_expr();
+    std::unique_ptr<Stmt> parse_css_styles();
+    std::unique_ptr<Stmt> parse_html_template();
+    std::unique_ptr<Stmt> parse_python_import();
+    std::unique_ptr<Stmt> parse_js_export();
     std::unique_ptr<BlockStmt> parse_block_stmt(const std::string& context_name);
     std::unique_ptr<Stmt> parse_expression_stmt();
 

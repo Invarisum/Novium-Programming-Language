@@ -174,14 +174,12 @@ std::string type_to_ir(novium::TypePtr type) {
             // Not fully supported in IR round-trip
             return "function";
         }
-        case novium::TypeKind::ARRAY: {
+        case novium::TypeKind::ARRAY:
             // Array<T>
-            auto elem = type->element_type;
-            return "array<" + type_to_ir(elem) + ">";
-        }
-        case novium::TypeKind::SLICE: {
+            return "array<" + type_to_ir(type->element_type) + ">";
+
+        case novium::TypeKind::SLICE:
             return "slice<" + type_to_ir(type->element_type) + ">";
-        }
         case novium::TypeKind::TYPE_VAR:
         case novium::TypeKind::INFER: return "infer";
         default: return "any";
@@ -272,23 +270,31 @@ std::unique_ptr<IRModule> novium_ast_to_ir(const std::vector<std::unique_ptr<nov
 // Convert Migration IR back to Novium AST (round-trip)
 std::vector<std::unique_ptr<novium::Stmt>> ir_to_novium_ast(const IRModule& module) {
     std::vector<std::unique_ptr<novium::Stmt>> stmts;
-    
+
     for (const auto& item : module.items) {
         if (auto* fn = dynamic_cast<IRFunc*>(item.get())) {
-            // Build Novium function declaration
+            // Reconstruct the function declaration from IR
             novium::TypeAnnotation ret_ann;
-            ret_ann.name = "void"; // Default
-            // This is simplified - full round-trip would need type reconstruction
-            
-            novium::FunctionDeclStmt::FunctionParam params;
-            // ... map params
-            
-            // For now, create a minimal function decl
-            // In a full implementation, we'd need the full type system
-            stmts.push_back(nullptr); // Placeholder
+            ret_ann.name = fn->return_type.empty() ? "void" : fn->return_type;
+
+            std::vector<novium::FunctionParam> params;
+            size_t count = std::min(fn->param_names.size(), fn->param_types.size());
+            for (size_t i = 0; i < count; ++i) {
+                novium::FunctionParam p;
+                p.name = fn->param_names[i];
+                p.type.name = fn->param_types[i];
+                params.push_back(std::move(p));
+            }
+
+            auto body = std::make_unique<novium::BlockStmt>(
+                std::vector<std::unique_ptr<novium::Stmt>>{}, novium::SourceLocation{});
+
+            stmts.push_back(std::make_unique<novium::FunctionDeclStmt>(
+                fn->name, std::move(params), ret_ann, !fn->return_type.empty(),
+                std::move(body), fn->is_async, false, "", "", novium::SourceLocation{}));
         }
     }
-    
+
     return stmts;
 }
 
@@ -350,9 +356,9 @@ std::string ir_to_go(const IRModule& module) {
             }
             
             // Generate body
-            if (auto* block = dynamic_cast<IRBlock*>(/* fn->body */ nullptr)) {
+            if (auto* block = dynamic_cast<IRBlock*>(fn->body.empty() ? nullptr : fn->body[0].get())) {
                 // Simplified - would need full body traversal
-                ss << "    // Body: " << fn->name << "\n";
+                ss << block->to_string();
             }
             
             ss << "}\n\n";
@@ -378,19 +384,20 @@ std::string ir_to_python(const IRModule& module) {
             ss << "def " << fn->name << "(";
             
             for (size_t i = 0; i < fn->param_names.size(); ++i) {
-                ss << "int " << fn->param_names[i]  // Simplified type hint
+                ss << fn->param_names[i] << ": " << fn->param_types[i]
                    << (i < fn->param_names.size() - 1 ? ", " : "");
             }
             
             if (fn->return_type != "void") {
-                ss << ") -> int:\n";
+                ss << ") -> " << fn->return_type << ":\n";
             } else {
-                ss << ":\n";
+                ss << "):\n";
             }
             
             // Generate body
-            if (auto* block = dynamic_cast<IRBlock*>(/* fn->body */ nullptr)) {
-                ss << "    # Body: " << fn->name << "\n";
+            if (auto* block = dynamic_cast<IRBlock*>(fn->body.empty() ? nullptr : fn->body[0].get())) {
+                ss << block->to_string();
+            } else {
                 ss << "    pass  # Placeholder\n";
             }
             
@@ -456,10 +463,10 @@ std::unique_ptr<IRModule> python_source_to_ir(const std::string& source) {
     while ((pos = source.find("def ", pos)) != std::string::npos) {
         // Find function name
         size_t name_start = pos + 4;
-        # Find end of function name (end of line or opening paren for args)
+        // Find end of function name (end of line or opening paren for args)
         size_t name_end = source.find('(', name_start);
         if (name_end == std::string::npos) {
-            name_end = source.find('\\n', name_start);
+            name_end = source.find('\n', name_start);
         }
         if (name_end != std::string::npos) {
             std::string fname = source.substr(name_start, name_end - name_start);
@@ -469,9 +476,9 @@ std::unique_ptr<IRModule> python_source_to_ir(const std::string& source) {
             auto ir_fn = std::make_unique<IRFunc>(fname);
             
             // Look for parameters: "def func(a, b):"
-            args_start = source.find('(', name_end);
+            size_t args_start = source.find('(', name_end);
             if (args_start != std::string::npos) {
-                args_end = source.find(')', args_start);
+                size_t args_end = source.find(')', args_start);
                 if (args_end != std::string::npos) {
                     std::string args_str = source.substr(args_start + 1, args_end - args_start - 1);
                     // Very simplified: just count args
@@ -485,7 +492,7 @@ std::unique_ptr<IRModule> python_source_to_ir(const std::string& source) {
             }
             
             // Look for return type annotation or body
-            body_start = source.find(':', args_end);
+            size_t body_start = source.find(':', args_start);
             if (body_start != std::string::npos) {
                 // Has a body - find indentation level
                 // For now, just add a placeholder
@@ -529,7 +536,7 @@ std::unique_ptr<IRModule> rust_source_to_ir(const std::string& source) {
                     // Extract type after colon
                     std::string type_str = params_str.substr(colon_pos + 1);
                     // Trim
-                    while (!type_str.empty() && std::isspace(type_str.front())) type_str.erase(type_str.front());
+                    while (!type_str.empty() && std::isspace(type_str.front())) type_str.erase(type_str.begin());
                     while (!type_str.empty() && std::isspace(type_str.back())) type_str.pop_back();
                     
                     // Add a parameter with this type
@@ -547,7 +554,7 @@ std::unique_ptr<IRModule> rust_source_to_ir(const std::string& source) {
                 if (arrow_end != std::string::npos) {
                     std::string ret_str = source.substr(arrow_pos + 2, arrow_end - arrow_pos - 2);
                     // Trim
-                    while (!ret_str.empty() && std::isspace(ret_str.front())) ret_str.erase(ret_str.front());
+                    while (!ret_str.empty() && std::isspace(ret_str.front())) ret_str.erase(ret_str.begin());
                     while (!ret_str.empty() && std::isspace(ret_str.back())) ret_str.pop_back();
                     if (!ret_str.empty()) {
                         ir_fn->return_type = ret_str;
@@ -641,4 +648,11 @@ int main_migrate(int argc, char* argv[]) {
     std::cout << result;
     
     return 0;
+}
+
+} // namespace novium::migratir
+
+// CLI entry point for the migration tool
+int main(int argc, char* argv[]) {
+    return novium::migratir::main_migrate(argc, argv);
 }

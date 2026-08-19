@@ -13,6 +13,7 @@
 #include <memory>
 #include <vector>
 #include "parser/ast.h"
+#include "sema/types.h"
 
 namespace novium {
 
@@ -75,14 +76,17 @@ private:
     void generate_program(const std::vector<std::unique_ptr<novium::Stmt>>& program);
 
     // Generate function declarations
-    void generate_function(novium::FunctionDeclStmt* fn);
+    std::string generate_function(novium::FunctionDeclStmt* fn);
+
+    // Generate block statements
+    std::string generate_block(novium::BlockStmt* block);
 
     // Generate variable declarations
-    void generate_var_decl(novium::VarDeclStmt* stmt);
+    std::string generate_var_decl(novium::VarDeclStmt* stmt);
 
     // Generate print/println statements
-    void generate_print(novium::PrintStmt* stmt);
-    void generate_println(novium::PrintLnStmt* stmt);
+    std::string generate_print(novium::PrintStmt* stmt);
+    std::string generate_println(novium::PrintLnStmt* stmt);
 
     // Generate expression code
     std::string generate_expr(novium::Expr* expr);
@@ -96,6 +100,18 @@ private:
     // Generate binary operation code
     std::string generate_binary(novium::BinaryExpr* expr);
 
+    // Generate call expressions
+    std::string generate_call(novium::CallExpr* expr);
+
+    // Generate unary expressions
+    std::string generate_unary(novium::UnaryExpr* expr);
+
+    // Generate member access
+    std::string generate_member_access(novium::MemberAccessExpr* expr);
+
+    // Generate index expressions
+    std::string generate_index(novium::IndexExpr* expr);
+
     // Generate if statements
     std::string generate_if(novium::IfStmt* stmt);
 
@@ -107,6 +123,12 @@ private:
 
     // Generate return statements
     std::string generate_return(novium::ReturnStmt* stmt);
+
+    // Generate class declarations
+    std::string generate_class(novium::ClassDeclStmt* cls);
+
+    // Generate interface declarations
+    std::string generate_interface(novium::InterfaceDeclStmt* iface);
 
     // Get JS type for a Novium type
     std::string get_js_type(novium::TypePtr type);

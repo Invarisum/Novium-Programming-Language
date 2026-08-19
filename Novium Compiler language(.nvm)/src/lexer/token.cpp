@@ -20,8 +20,10 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::IDENTIFIER:      return "IDENTIFIER";
 
         // Keywords
-        case TokenType::KW_FN:           return "KW_FN";
-        case TokenType::KW_CLASS:        return "KW_CLASS";
+case TokenType::KW_FN:           return "KW_FN";
+        case TokenType::KW_EXTERN: return "KW_EXTERN";
+        case TokenType::KW_MOJI:     return "KW_MOJI";
+        case TokenType::KW_CLASS:    return "KW_CLASS";
         case TokenType::KW_INTERFACE:    return "KW_INTERFACE";
         case TokenType::KW_LET:          return "KW_LET";
         case TokenType::KW_VAR:          return "KW_VAR";
@@ -39,8 +41,11 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::KW_CATCH:        return "KW_CATCH";
         case TokenType::KW_FINALLY:      return "KW_FINALLY";
         case TokenType::KW_THROW:        return "KW_THROW";
+        case TokenType::KW_PANIC:        return "KW_PANIC";
         case TokenType::KW_GO:           return "KW_GO";
         case TokenType::KW_ASYNC:        return "KW_ASYNC";
+        case TokenType::KW_DEFER:        return "KW_DEFER";
+        case TokenType::KW_UNSAFE:       return "KW_UNSAFE";
         case TokenType::KW_AWAIT:        return "KW_AWAIT";
         case TokenType::KW_IMPORT:       return "KW_IMPORT";
         case TokenType::KW_FROM:         return "KW_FROM";
@@ -56,6 +61,31 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::KW_MACRO:        return "KW_MACRO";
         case TokenType::KW_COMPONENT:    return "KW_COMPONENT";
         case TokenType::KW_STATE:        return "KW_STATE";
+
+        // Mojo/Python compatibility keywords
+        case TokenType::KW_PUB:          return "KW_PUB";
+        case TokenType::KW_STRUCT:       return "KW_STRUCT";
+        case TokenType::KW_ENUM:         return "KW_ENUM";
+        case TokenType::KW_BORROW:       return "KW_BORROW";
+        case TokenType::KW_USING:        return "KW_USING";
+        case TokenType::KW_CAST:         return "KW_CAST";
+        case TokenType::KW_SIZEOF:       return "KW_SIZEOF";
+        case TokenType::KW_ALIGNOF:      return "KW_ALIGNOF";
+        case TokenType::KW_PASS:         return "KW_PASS";
+        case TokenType::KW_RAISE:        return "KW_RAISE";
+        case TokenType::KW_WITH:         return "KW_WITH";
+        case TokenType::KW_TENSOR:       return "KW_TENSOR";
+        case TokenType::KW_MATRIX:       return "KW_MATRIX";
+        case TokenType::KW_CORE:         return "KW_CORE";
+        case TokenType::KW_MATH:         return "KW_MATH";
+        case TokenType::KW_ARRAY:        return "KW_ARRAY";
+        case TokenType::KW_SLICE:        return "KW_SLICE";
+        case TokenType::KW_PYTHON:       return "KW_PYTHON";
+        case TokenType::KW_JSX:          return "KW_JSX";
+        case TokenType::KW_CSS:          return "KW_CSS";
+        case TokenType::KW_HTML:         return "KW_HTML";
+        case TokenType::KW_IMPORT_PYTHON: return "KW_IMPORT_PYTHON";
+        case TokenType::KW_EXPORT_JS:    return "KW_EXPORT_JS";
 
         // Type keywords
         case TokenType::KW_INT:          return "KW_INT";
@@ -85,6 +115,7 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::MINUS_EQUAL:     return "MINUS_EQUAL";
         case TokenType::STAR_EQUAL:      return "STAR_EQUAL";
         case TokenType::SLASH_EQUAL:     return "SLASH_EQUAL";
+        case TokenType::SLASH_GREATER:   return "SLASH_GREATER";
         case TokenType::ARROW:           return "ARROW";
         case TokenType::FAT_ARROW:       return "FAT_ARROW";
         case TokenType::DOT:            return "DOT";

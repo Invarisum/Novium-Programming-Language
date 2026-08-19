@@ -1,19 +1,13 @@
+//go:build !repl
+
 // ============================================================================
-// novium_cli_demo.go — Novium CLI Demo (Go)
+// novium_cli_demo.go �?" Novium CLI Demo (Go)
 // Demonstrates CLI patterns for the Novium language toolchain.
 // ============================================================================
 
-// ── CLI Command Constants ───────────────────────────────────────────────────
-const (
-	CmdHelp    = "help"
-	CmdRun     = "run"
-	CmdCheck   = "check"
-	CmdAst     = "ast"
-	CmdTokens  = "tokens"
-	CmdCodegen = "codegen"
-	CmdBuild   = "build"
-	CmdPackage = "pkg"
-)
+package main
+
+import "os"
 
 // ── Available Commands ──────────────────────────────────────────────────────
 
@@ -136,9 +130,9 @@ func main() {
 	}
 
 	switch command {
-	case CmdHelp:
+	case "help":
 		print(CmdHelp())
-	case CmdRun:
+	case "run":
 		if filepath == "" {
 			print("Error: No file specified")
 			print(CmdHelp())
@@ -147,7 +141,7 @@ func main() {
 		if err := CmdRun(filepath); err != nil {
 			print("Error running:", err.Error())
 		}
-	case CmdCheck:
+	case "check":
 		if filepath == "" {
 			print("Error: No file specified")
 			print(CmdHelp())
@@ -156,7 +150,7 @@ func main() {
 		if err := CmdCheck(filepath); err != nil {
 			print("Error checking:", err.Error())
 		}
-	case CmdAst:
+	case "ast":
 		if filepath == "" {
 			print("Error: No file specified")
 			print(CmdHelp())
@@ -165,7 +159,7 @@ func main() {
 		if err := CmdAst(filepath); err != nil {
 			print("Error printing AST:", err.Error())
 		}
-	case CmdTokens:
+	case "tokens":
 		if filepath == "" {
 			print("Error: No file specified")
 			print(CmdHelp())
@@ -174,7 +168,7 @@ func main() {
 		if err := CmdTokens(filepath); err != nil {
 			print("Error printing tokens:", err.Error())
 		}
-	case CmdCodegen:
+	case "codegen":
 		if filepath == "" {
 			print("Error: No file specified")
 			print(CmdHelp())
@@ -183,7 +177,7 @@ func main() {
 		if err := CmdCodegen(filepath); err != nil {
 			print("Error generating code:", err.Error())
 		}
-	case CmdBuild:
+	case "build":
 		target := "native"
 		if len(args) > 0 {
 			target = args[0]
@@ -196,11 +190,11 @@ func main() {
 		if err := CmdBuild(filepath, target); err != nil {
 			print("Error building:", err.Error())
 		}
-	case CmdPackage:
+	case "pkg":
 		if err := CmdPackage(args); err != nil {
 			print("Error package operation:", err.Error())
 		}
-	case CmdIde:
+	case "ide":
 		if filepath == "" {
 			print("Error: No file specified")
 			print(CmdHelp())
@@ -208,94 +202,6 @@ func main() {
 		}
 		if err := CmdIde(filepath); err != nil {
 			print("Error IDE operation:", err.Error())
-		}
-	default:
-		print("Unknown command: ", command)
-		print(CmdHelp())
-	}
-}
-
-// main — CLI Entry Point
-func main() {
-	if len(os.Args) < 2 {
-		print(CmdHelp())
-		return
-	}
-
-	command := os.Args[1]
-	filepath := ""
-	var args []string
-
-	// Parse remaining arguments
-	if len(os.Args) > 2 {
-		filepath = os.Args[2]
-		args = os.Args[3:]
-	}
-
-	switch command {
-	case CmdHelp:
-		print(CmdHelp())
-	case CmdRun:
-		if filepath == "" {
-			print("Error: No file specified")
-			print(CmdHelp())
-			return
-		}
-		if err := CmdRun(filepath); err != nil {
-			print("Error running:", err.Error())
-		}
-	case CmdCheck:
-		if filepath == "" {
-			print("Error: No file specified")
-			print(CmdHelp())
-			return
-		}
-		if err := CmdCheck(filepath); err != nil {
-			print("Error checking:", err.Error())
-		}
-	case CmdAst:
-		if filepath == "" {
-			print("Error: No file specified")
-			print(CmdHelp())
-			return
-		}
-		if err := CmdAst(filepath); err != nil {
-			print("Error printing AST:", err.Error())
-		}
-	case CmdTokens:
-		if filepath == "" {
-			print("Error: No file specified")
-			print(CmdHelp())
-			return
-		}
-		if err := CmdTokens(filepath); err != nil {
-			print("Error printing tokens:", err.Error())
-		}
-	case CmdCodegen:
-		if filepath == "" {
-			print("Error: No file specified")
-			print(CmdHelp())
-			return
-		}
-		if err := CmdCodegen(filepath); err != nil {
-			print("Error generating code:", err.Error())
-		}
-	case CmdBuild:
-		target := "native"
-		if len(args) > 0 {
-			target = args[0]
-		}
-		if filepath == "" {
-			print("Error: No file specified")
-			print(CmdHelp())
-			return
-		}
-		if err := CmdBuild(filepath, target); err != nil {
-			print("Error building:", err.Error())
-		}
-	case CmdPackage:
-		if err := CmdPackage(args); err != nil {
-			print("Error package operation:", err.Error())
 		}
 	default:
 		print("Unknown command: ", command)

@@ -1,0 +1,112 @@
+// =============================================================================
+# python_react_bridge.nvw — .nvw Python FFI + React Bridge Demo
+# .nvw: Frontend Web Compiler (interpreted version of .nvm)
+# Focus: Frontend features only — Python FFI for browser APIs, React JSX
+# No backend features: no memory management, no runtime GC
+# =============================================================================
+
+# ── Python FFI Import from Browser Context ──────────────────────────────────
+# .nvw can import Python modules that compile to JS equivalents
+# These are "frontend Python" - no backend runtime required
+
+python_import("browser")
+python_import("dom")
+
+# Access browser window object via Python FFI
+let window_size = python_call("window.innerWidth", 0)
+print("Browser width: " + window_size)
+
+let window_height = python_call("window.innerHeight", 0)
+print("Browser height: " + window_height)
+
+# Document API access
+let doc_title = python_call("document.title", 0)
+print("Document title: " + doc_title)
+
+# Math operations via Python (compiled to JS)
+let pi_val = python_call("math.pi")
+print("π via Python: " + pi_val)
+
+let area = python_call("math.pow", 5, 2)
+print("5^2 via Python: " + area)
+
+# React JSX Bridge - compile JSX to Novium representation
+# JSX is native to .nvw since it's a web/frontend language
+
+# Basic JSX element
+let basic_jsx = <div>Hello, Novium!</div>
+let compiled = jsx_compile(basic_jsx)
+print("Basic JSX compiled: " + compiled)
+
+# JSX with attributes
+let jsx_with_props = <div class="container" id="main">Content</div>
+let compiled_props = jsx_compile(jsx_with_props)
+print("JSX with props compiled: " + compiled_props)
+
+# Nested JSX
+let nested_jsx = <div>
+    <h1>Title</h1>
+    <p>Paragraph text</p>
+</div>
+let compiled_nested = jsx_compile(nested_jsx)
+print("Nested JSX compiled: " + compiled_nested)
+
+# React element creation from Novium values
+let element_props = {"class": "greeting", "id": "title"}
+let react_element = react_create("div", element_props)
+print("React element created: " + react_element)
+
+# React rendering with props
+let render_props = {"title": "Novium React Demo", "level": "1"}
+let render_result = react_render("App", render_props)
+print("React render result: " + render_result)
+
+# Python data → React props integration
+python_import("json")
+let json_data = python_call("json.dumps", {"status": "active", "count": 42})
+print("JSON from Python: " + json_data)
+
+# Parse JSON and create React props
+let parsed_data = python_call("json.loads", json_data)
+let react_props_from_python = {"data": parsed_data, "loaded": True}
+let integrated_render = react_render("DataDisplay", react_props_from_python)
+print("Python+React integrated: " + integrated_render)
+
+# Component composition with Python data
+let CounterComponent = <fn() -> div>
+    let count = python_call("random.randint", 1, 100)
+    
+    let increment = fn()
+        // In .nvw, state updates trigger minimal re-renders
+        // This would compile to React setState
+    end
+    
+    <div>
+        <h2>Random Count: {count}</h2>
+        <button on_click={increment}>Randomize</button>
+    </div>
+</fn>
+
+let counter = react_create("CounterComponent", {})
+let counter_render = react_render("App", {"showCounter": True})
+print("Counter component: " + counter_render)
+
+# API bridge - Python can call JavaScript APIs
+python_import("fetch")
+let api_result = python_call("fetch", "//api.example.com/data", {"method": "GET"})
+print("API call via Python: " + api_result)
+
+# React component that uses Python-calculated data
+let DataComponent = <fn(data) -> div>
+    <h3>Data: {data}</h3>
+    <p>Loaded from Python backend</p>
+</fn>
+
+let data_from_python = python_call("json.dumps", {"users": 10, "active": 5})
+let data_component = react_create("DataComponent", {"data": data_from_python})
+let data_render = react_render("App", {"showData": True})
+print("Data component rendered: " + data_render)
+
+print("Python FFI + React bridge demo complete!")
+# Note: .nvw focuses on frontend - Python compiles to JS,
+# React JSX compiles to virtual DOM description

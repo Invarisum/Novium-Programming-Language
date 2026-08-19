@@ -64,7 +64,7 @@ novium --codegen examples\hello.nvm
 
 ---
 
-## ▶️ Running Programs
+## ▶� Running Programs
 
 ### Basic Execution
 ```powershell
@@ -328,7 +328,7 @@ class Point:
 
 ---
 
-## 🛠️ Development Workflow
+## 🛠� Development Workflow
 
 ### Typical Developer Flow
 
@@ -408,7 +408,7 @@ For `--codegen` and `--check`, ensure the library path is configured.
 
 ---
 
-## 🛠️ Troubleshooting
+## 🛠� Troubleshooting
 
 ### Common Issues
 

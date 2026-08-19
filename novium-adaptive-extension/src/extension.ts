@@ -5,66 +5,12 @@
 // prevents dependency conflicts, and compiles blazingly fast for any target.
 
 import * as vscode from 'vscode';
-import { HardwareDetector } from './hardware-detector';
-import { AutoConfigurator } from './auto-configurator';
+import { HardwareDetector, HardwareProfile } from './hardware-detector';
+import { AutoConfigurator, NoviumProjectConfig } from './auto-configurator';
 import { DependencyResolver } from './dependency-resolver';
 import { BuildOptimizer } from './build-optimizer';
 import { DiagnosticEngine } from './diagnostic-engine';
 import { NoviumCLI } from './novium-cli';
-
-export interface HardwareProfile {
-  cpu: {
-    cores: number;
-    threads: number;
-    model: string;
-    frequencyMHz: number;
-    cacheL1KB: number;
-    cacheL2KB: number;
-    cacheL3KB: number;
-    simd: string[]; // ['AVX2', 'AVX512', 'NEON', 'SVE']
-  };
-  gpu?: {
-    vendor: 'nvidia' | 'amd' | 'intel' | 'apple';
-    model: string;
-    vramGB: number;
-    cudaCores?: number;
-    computeCapability?: string; // e.g., 'sm_86'
-    openclVersion?: string;
-    metalVersion?: string;
-  };
-  memory: {
-    totalGB: number;
-    availableGB: number;
-    speedMTs: number;
-  };
-  storage: {
-    type: 'nvme' | 'ssd' | 'hdd';
-    freeGB: number;
-    ioSpeedMBps: number;
-  };
-  os: {
-    platform: 'linux' | 'darwin' | 'win32';
-    arch: 'x64' | 'arm64' | 'riscv64';
-    kernelVersion: string;
-  };
-  container?: {
-    runtime: 'docker' | 'podman' | 'containerd';
-    cpus?: number;
-    memoryGB?: number;
-  };
-}
-
-export interface NoviumProjectConfig {
-  name: string;
-  version: string;
-  target: 'auto' | 'native' | 'wasm' | 'cuda' | 'gpu';
-  optimizationLevel: 'speed' | 'size' | 'balanced';
-  cudaArch: string;
-  parallelJobs: number;
-  optimizationFlags: string[];
-  dependencyOverrides: Map<string, string>;
-  lockfileHash: string;
-}
 
 interface ExtensionContext {
   hardware: HardwareProfile;
@@ -125,7 +71,7 @@ export function activate(context: vscode.ExtensionContext) {
 function initializeProject() {
   if (!extensionContext) return;
 
-  const { workspaceRoot, noviumCLI, hardware } = extensionContext;
+  const { workspaceRoot, noviumCLI } = extensionContext;
 
   vscode.window.withProgress({
     location: vscode.ProgressLocation.Notification,
@@ -135,7 +81,6 @@ function initializeProject() {
     progress.report({ increment: 10, message: 'Detecting hardware...' });
 
     // Generate optimized project config
-    const autoConfigurator = new AutoConfigurator(hardware);
     const config = noviumCLI.generateProjectConfig();
 
     // Create project structure
@@ -196,7 +141,8 @@ function diagnoseAndFix() {
     cancellable: false
   }, async (progress) => {
     const diagnosticEngine = new DiagnosticEngine(hardware);
-    const issues = await diagnosticEngine.runFullDiagnosis(workspaceRoot);
+    const report = await diagnosticEngine.runFullDiagnosis(workspaceRoot);
+    const issues = report.issues;
 
     progress.report({ increment: 50, message: 'Found issues, applying fixes...' });
 

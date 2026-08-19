@@ -359,36 +359,35 @@ func HandleInitialize(msg *Message, writer *Writer) {
 		TextDocumentSync: &TextDocumentSyncCapability{
 			Kind: SyncKindFull,
 		},
-		Hover: &HoverCapability{},
-		Completion: &CompletionCapability{
-			CompletionItem: &CompletionItemCapability{},
-		},
+		Hover:      &HoverCapability{},
+		Completion: &CompletionCapability{CompletionItem: &CompletionItemCapability{}},
 		Definition: &DefinitionCapability{},
 	}
 
-	result := InitializeResult{
-		Capabilities: &caps,
+	initResult := InitializeResponse{
+		ID:     msg.ID,
+		Result: InitializeResult{Capabilities: &caps},
+		Error:  nil,
 	}
 
-	initResult := InitializeResponse{
-		ID:      msg.ID,
-		Result:  result,
-		Error:   nil,
+	content, err := json.Marshal(initResult)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error marshaling init response: %v\n", err)
+		return
 	}
 
 	resp := Message{
-		ID:      msg.ID,
-		Method:  "",
-		Result:  json.RawMessage(json.Marshal(resp)),
-		Error:   nil,
+		ID:     msg.ID,
+		Result: json.RawMessage(content),
+		Error:  nil,
 	}
 
-	if err := writer.WriteMessage(&msg); err != nil {
+	if err := writer.WriteMessage(&resp); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing init response: %v\n", err)
 	}
 }
 
-// HandleHandleHandleTextDocumentPublishDiagnostics handles publishing diagnostics
+// HandleTextDocumentPublishDiagnostics handles publishing diagnostics
 func HandleTextDocumentPublishDiagnostics(_ *Message, _ *Writer) {
 	// Placeholder - diagnostics sent from client to server
 }
@@ -412,21 +411,22 @@ func HandleDidOpenTextDocument(msg *Message, writer *Writer) {
 	}
 }
 
-// HandleHandleTextDocumentCompletion handles completion requests
+// HandleTextDocumentCompletion handles completion requests
 func HandleTextDocumentCompletion(msg *Message, writer *Writer) {
 	params := CompletionParams{}
 	json.Unmarshal(msg.Params, &params)
 
 	// Generate completion items based on Novium keywords and standard library
 	items := []CompletionItem{}
+	kind := integer(CompletionItemKindFunction)
 
 	// Add Novium keywords
 	keywords := []string{"fn", "let", "var", "if", "elif", "else", "while", "match", "try", "catch", "return", "go", "async", "await"}
 	for _, kw := range keywords {
 		items = append(items, CompletionItem{
-			Label:      kw,
-			Kind:       &integer(CompletionItemKindFunction),
-			Detail:     "keyword",
+			Label:         kw,
+			Kind:          &kind,
+			Detail:        "keyword",
 			Documentation: "Novium language keyword",
 		})
 	}
@@ -436,9 +436,9 @@ func HandleTextDocumentCompletion(msg *Message, writer *Writer) {
 		"deg_to_rad", "rad_to_deg", "sin", "cos", "tan", "sinh", "cosh", "tanh"}
 	for _, f := range mathFuncs {
 		items = append(items, CompletionItem{
-			Label:      f,
-			Kind:       &integer(CompletionItemKindFunction),
-			Detail:     "standard library",
+			Label:         f,
+			Kind:          &kind,
+			Detail:        "standard library",
 			Documentation: "Standard library function from math.nvm",
 		})
 	}
@@ -447,9 +447,9 @@ func HandleTextDocumentCompletion(msg *Message, writer *Writer) {
 		"str_split", "str_starts_with", "str_ends_with", "html_escape", "html_unescape"}
 	for _, f := range stringFuncs {
 		items = append(items, CompletionItem{
-			Label:      f,
-			Kind:       &integer(CompletionItemKindFunction),
-			Detail:     "standard library",
+			Label:         f,
+			Kind:          &kind,
+			Detail:        "standard library",
 			Documentation: "Standard library function from string.nvm",
 		})
 	}
@@ -460,13 +460,18 @@ func HandleTextDocumentCompletion(msg *Message, writer *Writer) {
 	}
 
 	response := CompletionResponse{
-		ID:      msg.ID,
-		Result:  &result,
-		Error:   nil,
+		ID:     msg.ID,
+		Result: &result,
+		Error:  nil,
 	}
 
-	msg.Result = json.RawMessage(json.Marshal(response))
-	if err := writer.WriteMessage(&msg); err != nil {
+	content, err := json.Marshal(response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error marshaling completion response: %v\n", err)
+		return
+	}
+	msg.Result = json.RawMessage(content)
+	if err := writer.WriteMessage(msg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing completion response: %v\n", err)
 	}
 }
@@ -482,26 +487,29 @@ func HandleTextDocumentHover(msg *Message, writer *Writer) {
 	// 3. Return type information or documentation
 
 	// For now, return a basic hover with the keyword under cursor
-	line := ""
-	// Read from stdin or file - simplified for demo
 
 	// Create a simple hover with the word at position
-	word := "novium function"  // Placeholder
+	word := "novium function" // Placeholder
 	hoverDoc := fmt.Sprintf("## %s\n\nPlaceholder hover documentation for Novium at line %d, character %d.",
-		word, params.Position.Line+1, params.Position+1)
+		word, params.Position.Line+1, params.Position.Character+1)
 
 	result := HoverResult{
 		Contents: json.RawMessage(`"` + hoverDoc + `"`),
 	}
 
 	response := HoverResponse{
-		ID:      msg.ID,
-		Result:  &result,
-		Error:   nil,
+		ID:     msg.ID,
+		Result: &result,
+		Error:  nil,
 	}
 
-	msg.Result = json.RawMessage(json.Marshal(response))
-	if err := writer.WriteMessage(&msg); err != nil {
+	content, err := json.Marshal(response)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error marshaling hover response: %v\n", err)
+		return
+	}
+	msg.Result = json.RawMessage(content)
+	if err := writer.WriteMessage(msg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing hover response: %v\n", err)
 	}
 }
@@ -521,7 +529,7 @@ func main() {
 	}
 
 	// Send initialized notification
-	initialized := Notification{
+	initialized := Message{
 		Method: "initialized",
 		Params: json.RawMessage(`{}`),
 	}

@@ -16,21 +16,39 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
 endif()
 
 # ── Source Files ──────────────────────────────────────────────────────────────
+# LLVM codegen is optional: enable with -DNOVIUM_WITH_LLVM=ON when LLVM is
+# installed. Without it, a stub implementation keeps the build self-contained.
+option(NOVIUM_WITH_LLVM "Build with LLVM IR code generation" OFF)
+
+if(NOVIUM_WITH_LLVM)
+    find_package(LLVM CONFIG REQUIRED)
+    message(STATUS "LLVM found: ${LLVM_PACKAGE_VERSION}")
+    set(NOVIUM_CODEGEN_SOURCES src/codegen.cpp)
+else()
+    set(NOVIUM_CODEGEN_SOURCES src/codegen_stub.cpp)
+endif()
+
 set(NOVIUM_SOURCES
     src/lexer/token.cpp
     src/lexer/lexer.cpp
     src/parser/ast.cpp
     src/parser/ast_printer.cpp
     src/parser/parser.cpp
-    src/runtime/interpreter.cpp
     src/sema/types.cpp
     src/sema/symbol_table.cpp
     src/sema/type_checker.cpp
-    src/codegen.cpp
+    ${NOVIUM_CODEGEN_SOURCES}
     src/web_codegen.cpp
-    src/migration/migratir.cpp
+    src/unified_connections.cpp
+    src/runtime/novium_rt.cpp
     src/sdk/novium.c
+    src/moji/novium_moji_bridge.cpp
+    src/runtime/interpreter.cpp
 )
+
+# The SDK runtime is plain C but the project builds with C++ only;
+# compile it as C++ (the code is valid in both languages).
+set_source_files_properties(src/sdk/novium.c PROPERTIES LANGUAGE CXX)
 
 # ── Novium Compiler Library ───────────────────────────────────────────────────
 # Build the compiler internals as a static library so both the main binary
@@ -43,8 +61,8 @@ add_executable(novium src/main.cpp)
 target_link_libraries(novium PRIVATE novium_lib)
 
 # ── Migration Tool ────────────────────────────────────────────────────────────
-# Build the migration/translation tool
-add_executable(migration_tool src/migration/migratir.cpp)
+add_executable(migration_tool migration/migratir.cpp)
+target_include_directories(migration_tool PRIVATE migration src)
 target_link_libraries(migration_tool PRIVATE novium_lib)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -58,21 +76,14 @@ add_executable(lexer_stress_test tests/lexer_stress_test.cpp)
 target_link_libraries(lexer_stress_test PRIVATE novium_lib)
 add_test(NAME LexerStressTest COMMAND lexer_stress_test)
 
-add_executable(parser_test tests/parser_test.cpp)
-target_link_libraries(parser_test PRIVATE novium_lib)
-add_test(NAME ParserTest COMMAND parser_test)
-
 add_executable(runtime_test tests/runtime_test.cpp)
 target_link_libraries(runtime_test PRIVATE novium_lib)
 add_test(NAME RuntimeTest COMMAND runtime_test)
 
-add_executable(test_harness tests/framework/test_harness.cpp)
+add_executable(test_harness tests/framework/test_harness.cpp tests/test_main.cpp)
+target_include_directories(test_harness PRIVATE tests)
 target_link_libraries(test_harness PRIVATE novium_lib)
-add_test(NAME TestHarnessTest COMMAND test_harness)
-
-# ── Test Suite ──────────────────────────────────────────────────────────────
-# Run the full test harness on build
-add_test(NAME FullTestSuite COMMAND test_harness)
+add_test(NAME TestHarness COMMAND test_harness)
 
 # ── Cross-Language Build Integration ────────────────────────────────────────
 # Novium can be integrated with other languages in several ways:

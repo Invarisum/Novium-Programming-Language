@@ -209,6 +209,23 @@ public:
     }
 };
 
+// Type cast: e.g. "cast int(x)" or "x as string"
+class CastExpr : public Expr {
+public:
+    std::string target_type;        // Type name to cast to
+    std::unique_ptr<Expr> expression; // The expression being cast
+    SourceLocation location;
+
+    CastExpr(std::string target, std::unique_ptr<Expr> expr, SourceLocation loc)
+        : target_type(std::move(target)), expression(std::move(expr)), location(loc) {}
+
+    void accept(ASTVisitor* visitor) override;
+    std::unique_ptr<Expr> clone() const override {
+        return std::make_unique<CastExpr>(
+            target_type, expression ? expression->clone() : nullptr, location);
+    }
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // STATEMENTS (Perform actions, do not evaluate to values)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -281,7 +298,9 @@ public:
 // Empty statement: e.g. ";" - no-op, used for standalone semicolons
 class EmptyStmt : public Stmt {
 public:
-    EmptyStmt() {}
+    SourceLocation location;
+
+    explicit EmptyStmt(SourceLocation loc) : location(loc) {}
 
     void accept(ASTVisitor* visitor) override;
 };
@@ -304,15 +323,16 @@ public:
     bool is_async;
     bool is_extern;
     std::string extern_name; // C ABI function name (empty = use Novium name)
+    std::string extern_lang; // "C" or "Moji" or empty
     SourceLocation location;
 
     FunctionDeclStmt(std::string name, std::vector<FunctionParam> params,
                      TypeAnnotation ret_type, bool has_ret,
                      std::unique_ptr<BlockStmt> body, bool is_async, bool is_extern,
-                     std::string extern_name, SourceLocation loc)
+                     std::string extern_name, std::string extern_lang, SourceLocation loc)
         : name(std::move(name)), params(std::move(params)), return_type(std::move(ret_type))
         , has_return_type(has_ret), body(std::move(body)), is_async(is_async),
-        is_extern(is_extern), extern_name(std::move(extern_name)), location(loc) {}
+        is_extern(is_extern), extern_name(std::move(extern_name)), extern_lang(std::move(extern_lang)), location(loc) {}
 
     void accept(ASTVisitor* visitor) override;
 };
@@ -378,6 +398,30 @@ public:
            std::vector<ElifBranch> elif_b, std::unique_ptr<BlockStmt> else_b, SourceLocation loc)
         : condition(std::move(cond)), then_branch(std::move(then_b))
         , elif_branches(std::move(elif_b)), else_branch(std::move(else_b)), location(loc) {}
+
+    void accept(ASTVisitor* visitor) override;
+};
+
+// Defer statement: defers execution of a block until the current scope exits
+class DeferStmt : public Stmt {
+public:
+    std::unique_ptr<BlockStmt> body;
+    SourceLocation location;
+
+    DeferStmt(std::unique_ptr<BlockStmt> body, SourceLocation loc)
+        : body(std::move(body)), location(loc) {}
+
+    void accept(ASTVisitor* visitor) override;
+};
+
+// Unsafe block: allows raw pointer operations and FFI interop
+class UnsafeBlockStmt : public Stmt {
+public:
+    std::unique_ptr<BlockStmt> body;
+    SourceLocation location;
+
+    UnsafeBlockStmt(std::unique_ptr<BlockStmt> body, SourceLocation loc)
+        : body(std::move(body)), location(loc) {}
 
     void accept(ASTVisitor* visitor) override;
 };
@@ -476,6 +520,105 @@ public:
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// .nvw FRONTEND-SPECIFIC AST NODES
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Python FFI block: `python: ...` - import Python modules from web frontend
+class PythonFFIBlockStmt : public Stmt {
+public:
+    std::vector<std::unique_ptr<Stmt>> imports; // Python import statements
+    SourceLocation location;
+
+    PythonFFIBlockStmt(std::vector<std::unique_ptr<Stmt>> imps, SourceLocation loc)
+        : imports(std::move(imps)), location(loc) {}
+
+    void accept(ASTVisitor* visitor) override;
+};
+
+// JSX expression: `{expr}` - JavaScript expression inside braces
+class JSXExprExpr : public Expr {
+public:
+    std::unique_ptr<Expr> expression;
+    SourceLocation location;
+
+    JSXExprExpr(std::unique_ptr<Expr> expr, SourceLocation loc)
+        : expression(std::move(expr)), location(loc) {}
+
+    void accept(ASTVisitor* visitor) override;
+    std::unique_ptr<Expr> clone() const override {
+        return std::make_unique<JSXExprExpr>(
+            expression ? expression->clone() : nullptr,
+            location);
+    }
+};
+
+// JSX tag: `<Tag>children</Tag>` or `<Tag/>`
+class JSXTagExpr : public Expr {
+public:
+    std::string tag_name;
+    std::unique_ptr<Expr> children; // Children expressions/content
+    bool is_self_closing;
+    SourceLocation location;
+
+    JSXTagExpr(std::string name, std::unique_ptr<Expr> chil, bool self_close, SourceLocation loc)
+        : tag_name(std::move(name)), children(std::move(chil)), is_self_closing(self_close), location(loc) {}
+
+    void accept(ASTVisitor* visitor) override;
+    std::unique_ptr<Expr> clone() const override {
+        return std::make_unique<JSXTagExpr>(
+            tag_name, children ? children->clone() : nullptr, is_self_closing, location);
+    }
+};
+
+// CSS-in-JS styles: `css: "body { color: red; }"`
+class CSSStylesStmt : public Stmt {
+public:
+    std::string css_content; // Raw CSS string
+    SourceLocation location;
+
+    explicit CSSStylesStmt(std::string css, SourceLocation loc)
+        : css_content(std::move(css)), location(loc) {}
+
+    void accept(ASTVisitor* visitor) override;
+};
+
+// HTML template: `html: "<div>Hello</div>"`
+class HTMLTemplateStmt : public Stmt {
+public:
+    std::string html_content; // Raw HTML string
+    SourceLocation location;
+
+    explicit HTMLTemplateStmt(std::string html, SourceLocation loc)
+        : html_content(std::move(html)), location(loc) {}
+
+    void accept(ASTVisitor* visitor) override;
+};
+
+// Python import from module: `import_python "module_name"`
+class PythonImportStmt : public Stmt {
+public:
+    std::string module_name; // Name of Python module to import
+    SourceLocation location;
+
+    explicit PythonImportStmt(std::string mod, SourceLocation loc)
+        : module_name(std::move(mod)), location(loc) {}
+
+    void accept(ASTVisitor* visitor) override;
+};
+
+// JS export to JavaScript: `export_js fn_name`
+class JSExportStmt : public Stmt {
+public:
+    std::string func_name; // Function name to export to JS
+    SourceLocation location;
+
+    explicit JSExportStmt(std::string name, SourceLocation loc)
+        : func_name(std::move(name)), location(loc) {}
+
+    void accept(ASTVisitor* visitor) override;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // VISITOR PATTERN INTERFACE
 // ═══════════════════════════════════════════════════════════════════════════
 // The Visitor Pattern separates data structures (AST nodes) from the
@@ -494,6 +637,7 @@ struct ASTVisitor {
     virtual void visit(MemberAccessExpr* expr) = 0;
     virtual void visit(AwaitExpr* expr) = 0;
     virtual void visit(IndexExpr* expr) = 0;
+    virtual void visit(CastExpr* expr) = 0;
 
     // Statements
     virtual void visit(BlockStmt* stmt) = 0;
@@ -511,7 +655,16 @@ struct ASTVisitor {
     virtual void visit(ReturnStmt* stmt) = 0;
     virtual void visit(TryCatchStmt* stmt) = 0;
     virtual void visit(GoStmt* stmt) = 0;
+    virtual void visit(DeferStmt* stmt) = 0;
+    virtual void visit(UnsafeBlockStmt* stmt) = 0;
     virtual void visit(PanicStmt* stmt) = 0;
+    virtual void visit(PythonFFIBlockStmt* stmt) = 0;
+    virtual void visit(JSXExprExpr* expr) = 0;
+    virtual void visit(JSXTagExpr* expr) = 0;
+    virtual void visit(CSSStylesStmt* stmt) = 0;
+    virtual void visit(HTMLTemplateStmt* stmt) = 0;
+    virtual void visit(PythonImportStmt* stmt) = 0;
+    virtual void visit(JSExportStmt* stmt) = 0;
 };
 
 } // namespace novium

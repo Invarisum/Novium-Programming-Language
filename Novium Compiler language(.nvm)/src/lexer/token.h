@@ -39,7 +39,8 @@ enum class TokenType {
 
     // ── Keywords (reserved words with special meaning) ──
     KW_FN,              // fn         — function declaration
-      KW_EXTERN,        // extern     // extern "C" function declaration
+    KW_EXTERN,          // extern     // extern "C" function declaration
+    KW_MOJI,            // moji       // extern "Moji" function declaration
     KW_CLASS,           // class      — class declaration
     KW_INTERFACE,       // interface  — interface declaration
     KW_LET,             // let        — immutable variable binding
@@ -58,9 +59,11 @@ enum class TokenType {
     KW_CATCH,           // catch      — catch exception
     KW_FINALLY,         // finally    — always-run block
     KW_THROW,           // throw      — raise exception
+    KW_PANIC,           // panic      — abort with error message
     KW_GO,              // go         — spawn goroutine
     KW_ASYNC,           // async      — async function marker
     KW_AWAIT,           // await      — suspend until ready
+    KW_DEFER,           // defer      — defer execution until end of scope
     KW_IMPORT,          // import     — import module
     KW_FROM,            // from       — import source
     KW_AS,              // as         — alias or type cast
@@ -69,12 +72,38 @@ enum class TokenType {
     KW_SELF,            // self       — current instance reference
     KW_OWN,             // own        — ownership transfer marker
     KW_MUT,             // mut        — mutable borrow marker
+    KW_UNSAFE,          // unsafe     — unsafe code block
     KW_TRUE,            // true       — boolean literal
     KW_FALSE,           // false      — boolean literal
     KW_NULL,            // null       — null literal (nullable types only)
     KW_MACRO,           // macro      — macro definition
     KW_COMPONENT,       // component  — web component (for .nvw)
     KW_STATE,           // state      — component state (for .nvw)
+
+    // ── Mojo/Python compatibility keywords ──
+    KW_PUB,             // pub        — public visibility
+    KW_STRUCT,          // struct     — struct type
+    KW_ENUM,            // enum       — enum type
+    KW_BORROW,          // borrow     — borrow reference
+    KW_USING,           // using      — using declaration
+    KW_CAST,            // cast       — type cast
+    KW_SIZEOF,          // sizeof     — size of type
+    KW_ALIGNOF,         // alignof    — alignment of type
+    KW_PASS,            // pass       — pass statement (Python)
+    KW_RAISE,           // raise      — raise exception (Python)
+    KW_WITH,            // with       — with statement (Python)
+    KW_TENSOR,          // tensor     — tensor type
+    KW_MATRIX,          // matrix     — matrix type
+    KW_CORE,            // core       — core module
+    KW_MATH,            // math       — math module
+    KW_ARRAY,           // array      — array type
+    KW_SLICE,           // slice      — slice type
+    KW_PYTHON,          // python     — python compatibility block
+    KW_JSX,             // jsx        — JSX expression (.nvw)
+    KW_CSS,             // css        — CSS-in-JS styling
+    KW_HTML,            // html       — HTML template
+    KW_IMPORT_PYTHON,   // import_python — import Python module
+    KW_EXPORT_JS,       // export_js  — export function to JavaScript
 
     // ── Type Keywords ──
     KW_INT,             // int        — 64-bit signed integer
@@ -104,6 +133,7 @@ enum class TokenType {
     MINUS_EQUAL,        // -=
     STAR_EQUAL,         // *=
     SLASH_EQUAL,        // /=
+    SLASH_GREATER,      // />  (JSX self-closing tag terminator)
     ARROW,              // ->  (return type annotation)
     FAT_ARROW,          // =>  (match arm, lambda)
     DOT,                // .   (member access)

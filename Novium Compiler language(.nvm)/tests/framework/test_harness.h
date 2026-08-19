@@ -2,11 +2,21 @@
 // test_harness.h — Novium Test Framework Harness
 // ============================================================================
 //
-// Provides a test harness for Novium compiler testing with:
-// - Assertion macros
-// - Test discovery and registration
-// - Property-based testing support
-// - Automatic test result reporting
+// Provides a self-registering test framework for Novium compiler testing:
+// - TEST_CASE(name) auto-registration (no manual main bookkeeping)
+// - Exception-based assertions with file:line failure reporting
+// - Filtering (--filter <substr>) and listing (--list) support
+// - Per-test timing and summary reporting
+// - Property-based testing helper
+//
+// Usage:
+//   #include "framework/test_harness.h"
+//
+//   TEST_CASE(my_test) {
+//       int x = 1 + 1;
+//       TEST_CHECK(x == 2);
+//       TEST_CHECK_EQ(2, x);
+//   }
 //
 // ============================================================================
 
@@ -14,8 +24,12 @@
 
 #include <string>
 #include <vector>
+#include <sstream>
 #include <iostream>
-#include <cassert>
+#include <memory>
+#include <stdexcept>
+#include <chrono>
+#include <functional>
 #include "lexer/lexer.h"
 #include "parser/parser.h"
 #include "parser/ast_printer.h"
@@ -23,127 +37,241 @@
 namespace novium::test {
 
 // ============================================================================
-// Test Result
+// Test Failure
 // ============================================================================
 
-struct TestResult {
-    std::string name;
-    bool passed;
-    std::string error_message;
-    std::string stack_trace;
+// Thrown by assertions; carries the failure location for reporting.
+class TestFailure : public std::runtime_error {
+public:
+    TestFailure(const std::string& message, const std::string& file, int line)
+        : std::runtime_error(message), file_(file), line_(line) {}
 
-    TestResult(const std::string& name, bool passed,
-               const std::string& error_message = "",
-               const std::string& stack_trace = "")
-        : name(name), passed(passed),
-          error_message(error_message), stack_trace(stack_trace) {}
+    const std::string& file() const { return file_; }
+    int line() const { return line_; }
+
+private:
+    std::string file_;
+    int line_;
 };
 
 // ============================================================================
 // Assertion Macros
 // ============================================================================
 
-// MAKE_ASSERT(condition, message) - Custom assertion with message
-#define MAKE_ASSERT(condition, message) \
+// Internal: throw a TestFailure with the given location
+[[noreturn]] inline void fail_impl(const std::string& message,
+                                   const std::string& file, int line) {
+    throw TestFailure(message, file, line);
+}
+
+#define TEST_FAIL(message) \
+    ::novium::test::fail_impl((message), __FILE__, __LINE__)
+
+#define TEST_CHECK(condition) \
     do { \
         if (!(condition)) { \
-            return TestResult(#condition " (" message ")", false, message); \
+            std::ostringstream _msg; \
+            _msg << "CHECK failed: " << #condition; \
+            ::novium::test::fail_impl(_msg.str(), __FILE__, __LINE__); \
         } \
-    } while(0)
+    } while (0)
 
-// Internal helper for assert-like checks
-#define _TEST_ASSERT(condition) MAKE_ASSERT(condition, #condition " failed")
+#define TEST_CHECK_EQ(expected, actual) \
+    do { \
+        auto _expected = (expected); \
+        auto _actual = (actual); \
+        if (!(_expected == _actual)) { \
+            std::ostringstream _msg; \
+            _msg << "CHECK_EQ failed: " << #expected << " == " << #actual \
+                 << " (actual: " << _actual << ", expected: " << _expected << ")"; \
+            ::novium::test::fail_impl(_msg.str(), __FILE__, __LINE__); \
+        } \
+    } while (0)
+
+#define TEST_CHECK_NE(left, right) \
+    do { \
+        auto _left = (left); \
+        auto _right = (right); \
+        if (_left == _right) { \
+            std::ostringstream _msg; \
+            _msg << "CHECK_NE failed: " << #left << " != " << #right \
+                 << " (both: " << _left << ")"; \
+            ::novium::test::fail_impl(_msg.str(), __FILE__, __LINE__); \
+        } \
+    } while (0)
+
+// Assert that a piece of code throws (any exception)
+#define TEST_CHECK_THROWS(expr) \
+    do { \
+        bool _threw = false; \
+        try { \
+            (void)(expr); \
+        } catch (...) { \
+            _threw = true; \
+        } \
+        if (!_threw) { \
+            std::ostringstream _msg; \
+            _msg << "CHECK_THROWS failed: " << #expr << " did not throw"; \
+            ::novium::test::fail_impl(_msg.str(), __FILE__, __LINE__); \
+        } \
+    } while (0)
+
+// Assert that a piece of code throws a TestFailure/exception whose
+// message contains the given substring
+#define TEST_CHECK_THROWS_WITH(expr, expected_substring) \
+    do { \
+        bool _threw = false; \
+        try { \
+            (void)(expr); \
+        } catch (const std::exception& _ex) { \
+            _threw = true; \
+            if (std::string(_ex.what()).find(expected_substring) == std::string::npos) { \
+                std::ostringstream _msg; \
+                _msg << "CHECK_THROWS_WITH failed: exception message \"" \
+                     << _ex.what() << "\" does not contain \"" \
+                     << expected_substring << "\""; \
+                ::novium::test::fail_impl(_msg.str(), __FILE__, __LINE__); \
+            } \
+        } catch (...) { \
+            _threw = true; \
+        } \
+        if (!_threw) { \
+            std::ostringstream _msg; \
+            _msg << "CHECK_THROWS_WITH failed: " << #expr << " did not throw"; \
+            ::novium::test::fail_impl(_msg.str(), __FILE__, __LINE__); \
+        } \
+    } while (0)
 
 // ============================================================================
-// Base Test Class
+// Test Case Registration
 // ============================================================================
 
-class Test {
-public:
-    virtual ~Test() = default;
-    virtual TestRun run() = 0;
-    virtual std::string name() const = 0;
+using TestFn = std::function<void()>;
+
+struct TestCase {
+    std::string name;
+    std::string file;
+    int line;
+    TestFn fn;
 };
+
+class TestRegistry {
+public:
+    static TestRegistry& instance() {
+        static TestRegistry registry;
+        return registry;
+    }
+
+    void add(TestCase test_case) {
+        tests_.push_back(std::move(test_case));
+    }
+
+    std::vector<TestCase>& tests() { return tests_; }
+    const std::vector<TestCase>& tests() const { return tests_; }
+
+private:
+    std::vector<TestCase> tests_;
+};
+
+class TestRegistrar {
+public:
+    TestRegistrar(const std::string& name, TestFn fn, const std::string& file, int line) {
+        TestRegistry::instance().add(TestCase{name, file, line, std::move(fn)});
+    }
+};
+
+// Register a test function for automatic discovery:
+//   TEST_CASE(my_test_name) { ...body... }
+#define TEST_CASE(name) \
+    static void name(); \
+    static ::novium::test::TestRegistrar _novium_test_reg_##name( \
+        #name, &name, __FILE__, __LINE__); \
+    static void name()
 
 // ============================================================================
 // Test Runner
 // ============================================================================
 
+struct TestRunResult {
+    int total = 0;
+    int passed = 0;
+    int failed = 0;
+    double total_seconds = 0.0;
+};
+
 class TestRunner {
 public:
-    TestRunner() : total_(0), passed_(0), failed_(0) {}
+    explicit TestRunner(const std::string& filter = "") : filter_(filter) {}
 
-    // Add a test to run
-    void add_test(Test* test) {
-        tests_.push_back(test);
-        total_++;
+    // Run all tests (optionally filtered); returns counts and wall time
+    TestRunResult run() {
+        TestRunResult result;
+        const auto start = std::chrono::steady_clock::now();
+
+        for (const auto& test_case : TestRegistry::instance().tests()) {
+            if (!filter_.empty() &&
+                test_case.name.find(filter_) == std::string::npos) {
+                continue;
+            }
+            ++result.total;
+            try {
+                test_case.fn();
+                ++result.passed;
+                std::cout << "  PASS: " << test_case.name << "\n";
+            } catch (const TestFailure& failure) {
+                ++result.failed;
+                std::cout << "  FAIL: " << test_case.name
+                          << " (" << failure.file() << ":" << failure.line() << ")\n"
+                          << "        " << failure.what() << "\n";
+            } catch (const std::exception& ex) {
+                ++result.failed;
+                std::cout << "  ERROR: " << test_case.name
+                          << " - unexpected exception: " << ex.what() << "\n";
+            } catch (...) {
+                ++result.failed;
+                std::cout << "  ERROR: " << test_case.name
+                          << " - unknown exception\n";
+            }
+        }
+
+        const auto end = std::chrono::steady_clock::now();
+        result.total_seconds =
+            std::chrono::duration<double>(end - start).count();
+        return result;
     }
 
-    // Run all tests
-    void run() {
-        for (Test* test : tests_) {
-            TestRun result = test->run();
-            if (result.passed) {
-                passed_++;
-                std::cout << "  PASS: " << result.name << "\n";
-            } else {
-                failed_++;
-                std::cout << "  FAIL: " << result.name;
-                if (!result.error_message.empty()) {
-                    std::cout << " - " << result.error_message;
-                }
-                std::cout << "\n";
-            }
+    // List registered tests without running them
+    static void list() {
+        for (const auto& test_case : TestRegistry::instance().tests()) {
+            std::cout << "  " << test_case.name
+                      << " (" << test_case.file << ":" << test_case.line << ")\n";
         }
     }
 
-    // Summary
-    void summary() const {
-        std::cout << "\n═══ Test Results ═══\n";
-        std::cout << "Total: " << total_ << "\n";
-        std::cout << "Passed: " << passed_ << "\n";
-        std::cout << "Failed: " << failed_ << "\n";
-        if (failed_ > 0) {
-            std::cout << "\n❌ " << failed_ << " test(s) failed.\n";
+    // Print a summary of results
+    static void summary(const TestRunResult& result) {
+        std::cout << "\n═══════ Test Results ═══════\n";
+        std::cout << "Total:  " << result.total << "\n";
+        std::cout << "Passed: " << result.passed << "\n";
+        std::cout << "Failed: " << result.failed << "\n";
+        std::cout << "Time:   " << result.total_seconds << "s\n";
+        if (result.failed > 0) {
+            std::cout << "\n" << result.failed << " test(s) failed.\n";
         } else {
-            std::cout << "\n✅ All tests passed!\n";
+            std::cout << "\nAll tests passed!\n";
         }
     }
 
 private:
-    std::vector<Test*> tests_;
-    int total_;
-    int passed_;
-    int failed_;
+    std::string filter_;
 };
-
-// ============================================================================
-// Test Discovery and Registration
-// ============================================================================
-
-// Register a test class for automatic discovery
-#define REGISTER_TEST(test_class) \
-    namespace { \
-        struct test_class##_registrar { \
-            test_class##_registrar() { \
-                TestRunner::instance().add_test(new test_class()); \
-            } \
-        }; \
-        test_class##_registrar _##test_class##_registrar; \
-    }
-
-// Global test runner instance
-inline TestRunner& instance() {
-    static TestRunner runner;
-    return runner;
-}
 
 // ============================================================================
 // Common Test Utilities
 // ============================================================================
 
 // Parse and type-check a Novium source string
-static std::vector<std::unique_ptr<novium::Stmt>> parse_code(
+inline std::vector<std::unique_ptr<novium::Stmt>> parse_code(
     const std::string& source, bool& has_errors) {
     novium::Lexer lexer(source, "test.nvm");
     auto tokens = lexer.tokenize();
@@ -153,57 +281,41 @@ static std::vector<std::unique_ptr<novium::Stmt>> parse_code(
     return program;
 }
 
-// Print AST for test output
-static std::string dump_ast(const std::vector<std::unique_ptr<novium::Stmt>>& program) {
-    novium::ASTPrinter printer;
+// Print AST for test output (whole program)
+inline std::string dump_ast(
+    const std::vector<std::unique_ptr<novium::Stmt>>& program) {
     std::stringstream ss;
+    novium::ASTPrinter printer(ss);
     for (const auto& stmt : program) {
         printer.print(stmt.get());
     }
     return ss.str();
 }
 
-// Check if parser has errors
-static bool has_parser_errors(const std::vector<std::unique_ptr<novium::Stmt>>& program,
-                              const novium::Parser& parser) {
-    return parser.has_errors();
+// Print AST for test output (single node)
+inline std::string dump_ast(const novium::ASTNode* node) {
+    std::stringstream ss;
+    novium::ASTPrinter printer(ss);
+    printer.print(const_cast<novium::ASTNode*>(node));
+    return ss.str();
 }
 
 // ============================================================================
-// Property-Based Testing Helpers
+// Property-Based Testing Helper
 // ============================================================================
 
-// Run a property on generated Novium programs
-template<typename PropertyFn>
+// Run a property function repeatedly; returns false on the first failure.
+template <typename PropertyFn>
 bool run_property(PropertyFn property, int min_size = 1, int max_size = 50,
                   int iterations = 100) {
-    // Simple fuzz: generate random programs and check property
-    // Full implementation would use the fuzz.nvm library
-    return true; // Placeholder
+    (void)min_size;
+    (void)max_size;
+    for (int i = 0; i < iterations; ++i) {
+        if (!property()) {
+            return false;
+        }
+    }
+    return true;
 }
-
-// ============================================================================
-// Standard Assert Macros (backwards compatible)
-// ============================================================================
-
-// Assert two values are equal
-#define ASSERT_EQUAL(expected, actual) \
-    _TEST_ASSERT((expected) == (actual))
-
-// Assert a condition is true
-#define ASSERT_TRUE(condition) \
-    _TEST_ASSERT((condition))
-
-// Assert a condition is false
-#define ASSERT_FALSE(condition) \
-    _TEST_ASSERT(!(condition))
-
-// Assert that code fails (e.g., parser error expected)
-#define ASSERT_FAIL(block) \
-    _TEST_ASSERT(true) // Simplified - full impl would try/catch
-
-// Assert that code succeeds
-#define ASSERT_SUCCEED(block) \
-    _TEST_ASSERT(true) // Simplified
 
 } // namespace novium::test

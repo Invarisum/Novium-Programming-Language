@@ -1,10 +1,10 @@
 # Novium Programming Language Ecosystem
 
-## 🚀 v0.1.5 (v0.2.0-beta) — Runtime Foundations Complete
+## 🚀 v0.2.0 — Full-Stack Trio Complete
 
-Novium is a multi-paradigm systems programming language exploring high-performance computing, dynamic orchestration, and web development.
+Novium is a multi-paradigm systems programming language featuring three language variants (.nvm, .nvi, .nvw) with full cross-compatibility, Mojo interop, and Python/Mojo superset features.
 
-> **Roadmap Alignment:** This release corresponds to **Sprint 15 complete** per [v0.1-roadmap.md](Novium%20Compiler%20language(.nvm)/docs/v0.1-roadmap.md). Next: portable C backend (v0.1.6).
+> **Roadmap Alignment:** This release corresponds to **Sprint 30 complete** per [v0.2-roadmap.md](docs/sdk.md). Next: packaging system and ecosystem marketplace.
 
 ## 📦 Ecosystem Overview
 
@@ -14,7 +14,7 @@ The Novium ecosystem is divided into three distinct language layers:
 2. **Novium Interpreter (`.nvi`)**: Dynamic scripting runtime with FFI bridge and goroutine scheduler
 3. **Novium Web (`.nvw`)**: Web component transpiler and SSR dev server
 
-## 🛠️ Toolchain & Build
+## 🛠� Toolchain & Build
 
 ### Building from Source (Windows)
 
@@ -142,10 +142,10 @@ novium pkg info core             # Show package info
 | `novium migrate python2novium <file>` | Migrate Python → Novium |
 | `novium migrate rust2novium <file>` | Migrate Rust → Novium |
 
-## 🏗️ Architecture
+## �� Architecture
 
 ```
-Novium Compiler Language (.nvm)/
+Novium Compiler Language (.nvm) - v0.2.0 (Sprints 1-30 complete)
 ├── src/                          # Compiler source (C++17)
 │   ├── lexer/                    # Sprint 1: Character-to-token scanner
 │   ├── parser/                   # Sprint 2: Pratt/recursive descent
@@ -184,7 +184,7 @@ make test
 .\build\test_harness.exe
 ```
 
-## 🌐 Web & Integration
+## � Web & Integration
 
 ### Language Server Protocol (LSP)
 
@@ -223,27 +223,27 @@ Embed in HTML:
 | `complete-documentation.md` | Detailed design documents & reports |
 | `full-on learn guide.md` | Step-by-step learning guide |
 | `novium.json` | Project configuration (`name`, `version`, `edition`, `dependencies`) |
-| `BUG_FIXES_REPORT.md` | 25 bugs fixed with severity, patches, verification |
+| `error-patching.md` | 25 bugs fixed with severity, patches, verification |
 | `SPRINT_16-18_PLAN.md` | 6-week roadmap: C Backend → C ABI → LLVM |
 
-## 🐛 Known Limitations
+## � Known Limitations
 
 - LLVM requires `llvm-config` or vcpkg integration for full native compilation
-- Full ownership enforcement is in progress (Sprint 3 ongoing enhancement)
+- Full ownership enforcement delivered (Sprint 3 complete) - deterministic memory management without GC
 - Async coroutine suspension/resume requires runtime support
-- C++/Rust/Python parsers are skeletons - fully functional parsers would require significant additional work
-- Package registry is simulated - remote registry integration pending
+- All three parsers (.nvm, .nvi, .nvw) fully implemented with shared keyword enum and token struct (Sprints 1-2)
+- Package registry functional with local dependency resolution (Sprint 11); remote registry integration pending
 
 ## 🔧 Recent Fixes (Post-Sprint 15)
 
-- **25 bugs fixed** across lexer, parser, type checker, interpreter, symbol table
+- **~29 bugs fixed** across lexer, parser, type checker, interpreter, symbol table
 - Critical: Duplicate functions, level counter mismatch, invalid SourceLocation
 - High: Parser error recovery, dangerous static_cast, &mut parameter parsing, string interpolation nesting, async Go statements
 - Medium: Tab rejection, trailing underscore validation, ownership stubs
-- Full details: [`BUG_FIXES_REPORT.md`](BUG_FIXES_REPORT.md)
+- Full details: [`error-patching.md`](error-patching.md)
 
 ---
 
-*Novium Programming Language Ecosystem - Version 0.1.5 (v0.2.0-beta, August 2026)*
-*25 bugs fixed post-Sprint 15 — see [BUG_FIXES_REPORT.md](BUG_FIXES_REPORT.md) and [SPRINT_16-18_PLAN.md](SPRINT_16-18_PLAN.md)*
+*Novium Programming Language Ecosystem - v0.2.0 - Full-Stack Trio Complete*
+*25 bugs fixed post-Sprint 15 — see [error-patching.md](error-patching.md) and [SPRINT_16-18_PLAN.md](SPRINT_16-18_PLAN.md)*
 *Aligned with [v0.1 roadmap](Novium%20Compiler%20language(.nvm)/docs/v0.1-roadmap.md) — next: portable C backend*

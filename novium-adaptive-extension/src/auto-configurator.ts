@@ -256,7 +256,7 @@ export class AutoConfigurator {
       compression: 'zstd',
       compressionLevel: 3,
       remoteCache: null, // Could be configured for distributed builds
-      hashAlgorithm: 'blake3'
+      hashAlgorithm: 'sha256'
     };
   }
 

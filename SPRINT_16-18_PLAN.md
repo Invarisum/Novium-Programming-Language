@@ -33,7 +33,7 @@
 
 ---
 
-## 🏁 Sprint 16: SDK Foundations (v0.1.7) — Week 1-2
+## � Sprint 16: SDK Foundations (v0.2.0) — Week 1-2
 **Goal:** Build the Novium SDK — libraries, headers, build integration, and Moji
 
 ### Must-Have (P0)
@@ -44,7 +44,7 @@
 | Novium → Moji bridge: `import moji` + `fn c_call() -> int` | `parser.cpp` + new `moji_bridge.cpp` | 3d | |
 | SDK `include/novium.h`: all types, macros, calling convention | `src/sdk/novium.h` (new) | 2d | |
 | `--sdk` CLI: emit SDK package (headers + lib + cmake config) | `main.cpp` + CMake | 1d | |
-| Build: `novium sdk` → `novium-sdk-v0.1.7/` with all artifacts | `CMakeLists.txt` | 1d | |
+| Build: `novium sdk` → `novium-sdk-v0.2.0/` with all artifacts | `CMakeLists.txt` | 1d | |
 
 ### Should-Have (P1)
 | Task | File | Est. |
@@ -69,7 +69,7 @@
 
 ---
 
-## 🏁 Sprint 17: Mojo Cross-Language + Runtime (v0.2.0) — Week 3-4
+## � Sprint 17: Mojo Cross-Language + Runtime (v0.2.0) — Week 3-4
 **Goal:** Deep Mojo interop + runtime features that make Novium a true systems language
 
 ### Must-Have (P0)
@@ -102,7 +102,7 @@
 
 ---
 
-## 🏁 Sprint 18: SDK & Tooling Generalization (v0.2.1 → v0.3.0) — Week 5-6
+## � Sprint 18: SDK & Tooling Generalization (v0.2.1 → v0.3.0) — Week 5-6
 **Goal:** SDK maturity, language-agnostic tooling, and "better things" for developers
 
 ### Must-Have (P0)
@@ -153,7 +153,7 @@
 
 | Gate | Version | Criteria | Date |
 |------|---------|----------|------|
-| **SDK Alpha** | v0.1.7 | `novium sdk` generates usable C headers + Moji FFI baseline | Sprint 16 |
+| **SDK Alpha** | v0.2.0 | `novium sdk` generates usable C headers + Moji FFI baseline | Sprint 16 |
 | **Moji Interop Beta** | v0.2.0 | Novium `fn` callable from Moji, no segfaults | Sprint 17 |
 | **SDK RC** | v0.2.1 | `novium new`, `novium test --cross`, `novium fmt` all work | Sprint 18 |
 | **v0.3.0 Stable** | v0.3.0 | Full SDK + interop + tooling + docs + installer | After S18 |

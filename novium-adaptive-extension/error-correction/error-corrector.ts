@@ -3,6 +3,8 @@
 // ============================================================================
 
 import { DiagnosticIssue, DiagnosticReport } from '../src/diagnostic-engine';
+import { DiagnosticEngine } from '../src/diagnostic-engine';
+import { HardwareDetector } from '../src/hardware-detector';
 
 export interface FixResult {
   success: boolean;
@@ -24,9 +26,8 @@ export class ErrorCorrector {
     projectRoot: string
   ): Promise<FixResult> {
     // Step 1: Run diagnosis
-    const from = require('../src/hardware-detector').getHardwareDetector();
-    const hardware = from.detect();
-    const diagnosticEngine = new (require('../src/diagnostic-engine').DiagnosticEngine)(hardware);
+    const hardware = new HardwareDetector().detect();
+    const diagnosticEngine = new DiagnosticEngine(hardware);
 
     // Run full diagnosis
     const report = await diagnosticEngine.runFullDiagnosis(projectRoot);

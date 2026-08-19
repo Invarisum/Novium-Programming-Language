@@ -160,7 +160,7 @@ auto installed = ps.ListInstalled();
 - `FuzzAST(cfg, iterations)` → `bool` - AST invariant validation
 - `PropertyNonNilAST(cfg, iterations)` → `bool` - Property: non-nil AST after parse
 
-## 🛠️ Compiler Component APIs
+## 🛠� Compiler Component APIs
 
 ### LlvmCodeGen
 ```cpp
@@ -288,7 +288,7 @@ novium::migratir::translate(source, direction)      // Main CLI entry
 - Type mapping: `type_to_ir()`, `annot_to_ir()`, `token_to_ir_op()`
 - Main entry: `main_migrate(int argc, char* argv[])`
 
-## 📏 Language Syntax Reference
+## � Language Syntax Reference
 
 ### Novium Syntax
 ```
@@ -400,7 +400,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 | `--repl` | Start interactive REPL |
 | `migrate <dir> [file]` | Language migration tool |
 
-## 📏 Standards & Conventions
+## � Standards & Conventions
 
 ### C++ Conventions
 - C++17 standard

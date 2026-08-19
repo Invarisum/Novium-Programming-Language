@@ -5,9 +5,9 @@
   },
   "c_dependencies": [],
   "dependencies": {
-    "core": "*"
+    "core": "1.0.0"
   },
   "edition": "2026",
-  "name": "novium",
-  "version": "0.1.5"
+  "name": "testproject",
+  "version": "0.1.0"
 }

@@ -87,15 +87,11 @@ void WebCodeGen::generate_program(const std::vector<std::unique_ptr<novium::Stmt
 std::string WebCodeGen::generate_function(novium::FunctionDeclStmt* fn) {
     std::ostringstream ss;
 
-    // Determine the return type
-    std::string ret_type = get_js_type(/* need type from annotation */ nullptr);
-
-    // Generate parameter declarations
     ss << "function " << fn->name << "(";
 
     for (size_t i = 0; i < fn->params.size(); ++i) {
         const auto& param = fn->params[i];
-        ss << get_js_type(/* param type */ nullptr) << " " << param.name;
+        ss << param.name;
         if (i < fn->params.size() - 1) {
             ss << ", ";
         }
@@ -108,7 +104,7 @@ std::string WebCodeGen::generate_function(novium::FunctionDeclStmt* fn) {
         ss << generate_block(fn->body.get());
     }
 
-    ss << "\n}\n";
+    ss << "}\n";
     return ss.str();
 }
 
@@ -141,9 +137,6 @@ std::string WebCodeGen::generate_block(novium::BlockStmt* block) {
             ss << "  " << generate_while(wh) << "\n";
         } else if (auto* match = dynamic_cast<novium::MatchStmt*>(stmt.get())) {
             ss << "  " << generate_match(match) << "\n";
-        } else {
-            // Generic expression statement
-            ss << "  " << generate_expr(stmt.get()) << "\n";
         }
     }
 
@@ -161,17 +154,17 @@ std::string WebCodeGen::generate_var_decl(novium::VarDeclStmt* stmt) {
     std::string keyword = stmt->is_mutable ? "let" : "const";
 
     // Add type annotation if present
-    if (stmt.has_type_annotation) {
-        ss << keyword << " " << stmt.name << ": " << get_js_type(/* type */ nullptr);
-        if (stmt.initializer) {
-            ss << " = " << generate_expr(stmt.initializer.get());
+    if (stmt->has_type_annotation) {
+        ss << keyword << " " << stmt->name << ": " << get_js_type(/* type */ nullptr);
+        if (stmt->initializer) {
+            ss << " = " << generate_expr(stmt->initializer.get());
         }
     } else {
         // Inferred type from initializer
-        if (stmt.initializer) {
-            ss << keyword << " " << stmt.name << " = " << generate_expr(stmt.initializer.get());
+        if (stmt->initializer) {
+            ss << keyword << " " << stmt->name << " = " << generate_expr(stmt->initializer.get());
         } else {
-            ss << keyword << " " << stmt.name << " = null";
+            ss << keyword << " " << stmt->name << " = null";
         }
     }
 
@@ -218,42 +211,53 @@ std::string WebCodeGen::generate_println(novium::PrintLnStmt* stmt) {
 std::string WebCodeGen::generate_expr(novium::Expr* expr) {
     if (!expr) return "null";
 
-    switch (expr->kind) {
-        case novium::ExprKind::IDENTIFIER: {
-            return generate_identifier(static_cast<novium::IdentifierExpr*>(expr));
-        }
-
-        case novium::ExprKind::LITERAL: {
-            return generate_literal(static_cast<novium::LiteralExpr*>(expr));
-        }
-
-        case novium::ExprKind::BINARY: {
-            return generate_binary(static_cast<novium::BinaryExpr*>(expr));
-        }
-
-        case novium::ExprKind::CALL: {
-            return "(" + generate_call(static_cast<novium::CallExpr*>(expr)) + ")";
-        }
-
-        case novium::ExprKind::UNARY: {
-            return "(" + generate_unary(static_cast<novium::UnaryExpr*>(expr)) + ")";
-        }
-
-        case novium::ExprKind::MEMBER_ACCESS: {
-            return "(" + generate_member_access(static_cast<novium::MemberAccessExpr*>(expr)) + ")";
-        }
-
-        case novium::ExprKind::INDEX: {
-            return "(" + generate_index(static_cast<novium::IndexExpr*>(expr)) + ")";
-        }
-
-        case novium::ExprKind::RETURN: {
-            return generate_return(static_cast<novium::ReturnStmt*>(expr));
-        }
-
-        default:
-            return "null";
+    if (auto* id = dynamic_cast<novium::IdentifierExpr*>(expr)) {
+        return generate_identifier(id);
     }
+    if (auto* lit = dynamic_cast<novium::LiteralExpr*>(expr)) {
+        return generate_literal(lit);
+    }
+    if (auto* bin = dynamic_cast<novium::BinaryExpr*>(expr)) {
+        return generate_binary(bin);
+    }
+    if (auto* call = dynamic_cast<novium::CallExpr*>(expr)) {
+        return "(" + generate_call(call) + ")";
+    }
+    if (auto* un = dynamic_cast<novium::UnaryExpr*>(expr)) {
+        return "(" + generate_unary(un) + ")";
+    }
+    if (auto* mem = dynamic_cast<novium::MemberAccessExpr*>(expr)) {
+        return "(" + generate_member_access(mem) + ")";
+    }
+    if (auto* idx = dynamic_cast<novium::IndexExpr*>(expr)) {
+        return "(" + generate_index(idx) + ")";
+    }
+    if (auto* cast = dynamic_cast<novium::CastExpr*>(expr)) {
+        // JS has no explicit casts; emit the expression with a comment
+        return "(/* cast to " + cast->target_type + " */ " +
+               generate_expr(cast->expression.get()) + ")";
+    }
+    if (auto* aw = dynamic_cast<novium::AwaitExpr*>(expr)) {
+        return "(await " + generate_expr(aw->value.get()) + ")";
+    }
+    if (auto* jsx = dynamic_cast<novium::JSXTagExpr*>(expr)) {
+        std::string out = "<" + jsx->tag_name;
+        if (jsx->is_self_closing) {
+            out += " />";
+        } else {
+            out += ">";
+            if (jsx->children) {
+                out += generate_expr(jsx->children.get());
+            }
+            out += "</" + jsx->tag_name + ">";
+        }
+        return out;
+    }
+    if (auto* jsx_expr = dynamic_cast<novium::JSXExprExpr*>(expr)) {
+        return "{ " + generate_expr(jsx_expr->expression.get()) + " }";
+    }
+
+    return "null";
 }
 
 // ============================================================================
@@ -489,7 +493,13 @@ std::string WebCodeGen::generate_match(novium::MatchStmt* stmt) {
         std::string pattern = generate_expr(arm.pattern.get());
         ss << "case " << pattern << ":\n";
         if (arm.body) {
-            ss << generate_block(arm.body.get());
+            if (auto* block = dynamic_cast<novium::BlockStmt*>(arm.body.get())) {
+                ss << generate_block(block);
+            } else if (auto* ret = dynamic_cast<novium::ReturnStmt*>(arm.body.get())) {
+                ss << "  " << generate_return(ret) << "\n";
+            } else if (auto* expr_stmt = dynamic_cast<novium::ExpressionStmt*>(arm.body.get())) {
+                ss << "  " << generate_expr(expr_stmt->expression.get()) << ";\n";
+            }
         }
         ss << "break;\n";
     }

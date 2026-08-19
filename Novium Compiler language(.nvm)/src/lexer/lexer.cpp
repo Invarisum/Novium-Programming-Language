@@ -49,7 +49,10 @@ static bool is_alnum(char c) {
 // user-defined identifier.
 
 const std::unordered_map<std::string, TokenType> Lexer::keywords_ = {
+    // Core language keywords
     {"fn",         TokenType::KW_FN},
+    {"extern",     TokenType::KW_EXTERN},
+    {"moji",       TokenType::KW_MOJI},
     {"class",      TokenType::KW_CLASS},
     {"interface",  TokenType::KW_INTERFACE},
     {"let",        TokenType::KW_LET},
@@ -68,9 +71,11 @@ const std::unordered_map<std::string, TokenType> Lexer::keywords_ = {
     {"catch",      TokenType::KW_CATCH},
     {"finally",    TokenType::KW_FINALLY},
     {"throw",      TokenType::KW_THROW},
+    {"panic",      TokenType::KW_PANIC},
     {"go",         TokenType::KW_GO},
     {"async",      TokenType::KW_ASYNC},
     {"await",      TokenType::KW_AWAIT},
+    {"defer",      TokenType::KW_DEFER},
     {"import",     TokenType::KW_IMPORT},
     {"from",       TokenType::KW_FROM},
     {"as",         TokenType::KW_AS},
@@ -79,18 +84,49 @@ const std::unordered_map<std::string, TokenType> Lexer::keywords_ = {
     {"self",       TokenType::KW_SELF},
     {"own",        TokenType::KW_OWN},
     {"mut",        TokenType::KW_MUT},
+    {"unsafe",     TokenType::KW_UNSAFE},
     {"true",       TokenType::KW_TRUE},
     {"false",      TokenType::KW_FALSE},
     {"null",       TokenType::KW_NULL},
-    {"extern",     TokenType::KW_EXTERN},
     {"macro",      TokenType::KW_MACRO},
     {"component",  TokenType::KW_COMPONENT},
     {"state",      TokenType::KW_STATE},
+
+    // Type keywords
     {"int",        TokenType::KW_INT},
     {"float",      TokenType::KW_FLOAT},
     {"string",     TokenType::KW_STRING_TYPE},
     {"bool",       TokenType::KW_BOOL},
     {"void",       TokenType::KW_VOID},
+
+    // Mojo compatibility keywords
+    {"pub",        TokenType::KW_PUB},      // public visibility
+    {"struct",     TokenType::KW_STRUCT},   // struct type
+    {"enum",       TokenType::KW_ENUM},     // enum type
+    {"borrow",     TokenType::KW_BORROW},   // borrow reference
+    {"using",      TokenType::KW_USING},    // using declaration
+    {"cast",       TokenType::KW_CAST},     // type cast
+    {"sizeof",     TokenType::KW_SIZEOF},   // size of type
+    {"alignof",    TokenType::KW_ALIGNOF},  // alignment of type
+    {"tensor",     TokenType::KW_TENSOR},   // tensor type
+    {"matrix",     TokenType::KW_MATRIX},   // matrix type
+    {"core",       TokenType::KW_CORE},     // core module
+    {"math",       TokenType::KW_MATH},     // math module
+    {"array",      TokenType::KW_ARRAY},    // array type
+    {"slice",      TokenType::KW_SLICE},    // slice type
+
+    // Python compatibility keywords
+    {"pass",       TokenType::KW_PASS},     // pass statement (Python)
+    {"raise",      TokenType::KW_RAISE},    // raise exception (Python)
+    {"with",       TokenType::KW_WITH},     // with statement (Python)
+    {"python",     TokenType::KW_PYTHON},   // python compatibility block
+
+    // .nvw (web) keywords
+    {"jsx",            TokenType::KW_JSX},
+    {"css",            TokenType::KW_CSS},
+    {"html",           TokenType::KW_HTML},
+    {"import_python",  TokenType::KW_IMPORT_PYTHON},
+    {"export_js",      TokenType::KW_EXPORT_JS},
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -265,7 +301,7 @@ Token Lexer::scan_identifier() {
 // IMPORTANT: "1.method()" should NOT parse "1." as a float.
 // We only treat the dot as decimal if it's followed by a digit.
 
-Token Lexer::scan_number() {
+Token Lexer::scan_number(std::vector<Token>& out) {
     int start_col = column_;
     int start_line = line_;
     std::string num;
@@ -290,13 +326,13 @@ Token Lexer::scan_number() {
                     if (is_at_end() || (!is_digit(peek()) && 
                         !(peek() >= 'a' && peek() <= 'f') && 
                         !(peek() >= 'A' && peek() <= 'F'))) {
-                        tokens.push_back(error_token("Trailing underscore in hex literal"));
+                        out.push_back(error_token("Trailing underscore in hex literal"));
                         break;
                     }
                 }
             }
             if (!has_digits) {
-                tokens.push_back(error_token("Hex literal requires at least one digit"));
+                out.push_back(error_token("Hex literal requires at least one digit"));
             }
             return make_token_at(TokenType::INTEGER_LITERAL, num, start_line, start_col);
         }
@@ -311,13 +347,13 @@ Token Lexer::scan_number() {
                 } else {
                     advance();
                     if (is_at_end() || (peek() != '0' && peek() != '1')) {
-                        tokens.push_back(error_token("Trailing underscore in binary literal"));
+                        out.push_back(error_token("Trailing underscore in binary literal"));
                         break;
                     }
                 }
             }
             if (!has_digits) {
-                tokens.push_back(error_token("Binary literal requires at least one digit"));
+                out.push_back(error_token("Binary literal requires at least one digit"));
             }
             return make_token_at(TokenType::INTEGER_LITERAL, num, start_line, start_col);
         }
@@ -332,13 +368,13 @@ Token Lexer::scan_number() {
         } else {
             advance();
             if (is_at_end() || !is_digit(peek())) {
-                tokens.push_back(error_token("Trailing underscore in integer literal"));
+                out.push_back(error_token("Trailing underscore in integer literal"));
                 break;
             }
         }
     }
     if (!has_digits) {
-        tokens.push_back(error_token("Integer literal requires at least one digit"));
+        out.push_back(error_token("Integer literal requires at least one digit"));
     }
 
     // Decimal point — only if followed by a digit (to avoid "1.method()")
@@ -356,14 +392,14 @@ Token Lexer::scan_number() {
                 // Check if next is a digit or we're at end (would be trailing)
                 if (is_at_end() || !is_digit(peek())) {
                     // Trailing underscore - emit error but continue
-                    tokens.push_back(error_token("Trailing underscore in float literal"));
+                    out.push_back(error_token("Trailing underscore in float literal"));
                     break;
                 }
             }
         }
         // Ensure at least one digit after decimal point
         if (!has_digits_after_dot) {
-            tokens.push_back(error_token("Float literal requires digits after decimal point"));
+            out.push_back(error_token("Float literal requires digits after decimal point"));
         }
     }
 
@@ -374,8 +410,14 @@ Token Lexer::scan_number() {
         if (!is_at_end() && (peek() == '+' || peek() == '-')) {
             num += advance(); // sign
         }
+        // Require at least one digit after the exponent sign — reject "1e", "1e+"
+        bool has_exponent_digits = false;
         while (!is_at_end() && is_digit(peek())) {
             num += advance();
+            has_exponent_digits = true;
+        }
+        if (!has_exponent_digits) {
+            out.push_back(error_token("Float literal requires digits in exponent"));
         }
     }
 
@@ -514,7 +556,7 @@ void Lexer::scan_string(std::vector<Token>& out) {
                     }
 
                     // Scan one expression token
-                    Token t = scan_expression_token();
+                    Token t = scan_expression_token(out);
                     out.push_back(t);
                 }
 
@@ -563,7 +605,7 @@ void Lexer::scan_string(std::vector<Token>& out) {
 // Scans a single token inside a ${...} interpolation. Uses the same logic
 // as the main scanner but doesn't handle indentation or newlines.
 
-Token Lexer::scan_expression_token() {
+Token Lexer::scan_expression_token(std::vector<Token>& out) {
     // Skip spaces
     while (!is_at_end() && (peek() == ' ' || peek() == '\t')) {
         advance();
@@ -576,7 +618,7 @@ Token Lexer::scan_expression_token() {
     char c = peek();
 
     if (is_alpha(c) || c == '_') return scan_identifier();
-    if (is_digit(c)) return scan_number();
+    if (is_digit(c)) return scan_number(out);
 
     // Operators and delimiters (subset relevant in expressions)
     return scan_operator();
@@ -625,6 +667,7 @@ Token Lexer::scan_operator() {
 
         case '/':
             if (match('=')) return make_token_at(TokenType::SLASH_EQUAL, "/=", start_line, start_col);
+            if (match('>')) return make_token_at(TokenType::SLASH_GREATER, "/>", start_line, start_col);
             return make_token_at(TokenType::SLASH, "/", start_line, start_col);
 
         case '=':
@@ -702,7 +745,7 @@ void Lexer::handle_line_start(std::vector<Token>& tokens) {
     }
 
     // Skip comment-only lines — they don't affect indentation either
-    if (peek() == '/' && peek_next() == '/') {
+    if ((peek() == '/' && peek_next() == '/') || peek() == '#') {
         return; // The comment will be handled in the main loop
     }
 
@@ -849,7 +892,7 @@ std::vector<Token> Lexer::tokenize() {
 
         // ── Step 6: Numbers ──
         if (is_digit(c)) {
-            tokens.push_back(scan_number());
+            tokens.push_back(scan_number(tokens));
             continue;
         }
 
@@ -870,10 +913,24 @@ std::vector<Token> Lexer::tokenize() {
         } else if (t.type == TokenType::RPAREN ||
                    t.type == TokenType::RBRACKET ||
                    t.type == TokenType::RBRACE) {
-            if (bracket_depth_ > 0) bracket_depth_--;
+            if (bracket_depth_ > 0) {
+                bracket_depth_--;
+            } else {
+                tokens.push_back(error_token("Unmatched closing bracket: " + t.value));
+            }
         }
 
         tokens.push_back(t);
+    }
+
+    // ── Unbalanced opening brackets ──
+    // If the file ends with unclosed brackets, every NEWLINE after them was
+    // suppressed — report it so no source is silently swallowed.
+    if (bracket_depth_ > 0) {
+        tokens.push_back(error_token(
+            "Unclosed bracket: " + std::to_string(bracket_depth_) +
+            " bracket(s) left open at end of file"));
+        bracket_depth_ = 0;
     }
 
     // ── Emit trailing NEWLINE ──

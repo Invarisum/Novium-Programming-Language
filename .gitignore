@@ -1,5 +1,6 @@
 # Build artifacts
 build/
+build-*/
 *.exe
 *.obj
 *.o
@@ -23,7 +24,9 @@ CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 CMakeScripts/
-*.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
 
 # Ninja
 build.ninja
@@ -38,11 +41,18 @@ rules.ninja
 *.wat
 *.s
 *.asm
+*.gch
+*.pch
+*.gcno
+*.gcda
+*.profraw
 
 # Test outputs
 *.test
 test_*.exe
 test_*.out
+test_output.txt
+LastTest.log
 
 # IDE
 .vscode/
@@ -77,10 +87,31 @@ temp/
 *.nvi~
 *.nvw~
 
-# Go
+# Node.js / TypeScript extension
+node_modules/
+out/
+dist/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Go binaries (module-less standalone builds)
 novium_cli_demo
 novium_repl
 novium_pkg
+migration_tool
 
 # Migration tool
-migration_tool
+migration_tool.exe

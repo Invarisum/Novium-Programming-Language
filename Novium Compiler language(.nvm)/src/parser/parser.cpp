@@ -219,6 +219,86 @@ std::unique_ptr<Stmt> Parser::parse_statement() {
     if (match(TokenType::KW_GO)) {
         return parse_go_stmt();
     }
+    if (match(TokenType::KW_DEFER)) {
+        return parse_defer_stmt();
+    }
+    if (match(TokenType::KW_PANIC)) {
+        return parse_panic_stmt();
+    }
+    if (match(TokenType::KW_PYTHON)) {
+        // Python/Mojo compatibility block
+        return parse_python_ffi_block();
+    }
+    if (match(TokenType::KW_PUB)) {
+        // Mojo-style public visibility
+        return parse_pub_decl();
+    }
+    if (match(TokenType::KW_PASS)) {
+        // Python-style pass statement - no-op
+        return std::make_unique<EmptyStmt>(previous().location);
+    }
+    if (match(TokenType::KW_STRUCT)) {
+        return parse_struct_decl();
+    }
+    if (match(TokenType::KW_ENUM)) {
+        return parse_enum_decl();
+    }
+    if (match(TokenType::KW_USING)) {
+        // Mojo-style using declaration
+        return parse_using_decl();
+    }
+    if (match(TokenType::KW_RAISE)) {
+        // Python-style raise
+        return parse_raise_stmt();
+    }
+    if (match(TokenType::KW_WITH)) {
+        // Python-style with statement
+        return parse_with_stmt();
+    }
+    if (match(TokenType::KW_CAST)) {
+        // Mojo-style type cast
+        return std::make_unique<ExpressionStmt>(parse_cast_expr());
+    }
+    if (match(TokenType::KW_SIZEOF)) {
+        // Mojo-style sizeof
+        return std::make_unique<ExpressionStmt>(parse_sizeof_expr());
+    }
+    if (match(TokenType::KW_ALIGNOF)) {
+        // Mojo-style alignof
+        return std::make_unique<ExpressionStmt>(parse_alignof_expr());
+    }
+    if (match(TokenType::KW_TENSOR)) {
+        // Mojo tensor type
+        return parse_tensor_type();
+    }
+    if (match(TokenType::KW_MATRIX)) {
+        // Mojo matrix type
+        return parse_matrix_type();
+    }
+    if (match(TokenType::KW_JSX)) {
+        // JSX expression in .nvw
+        // JSX is expression-based, returns a JSX AST node
+        return std::make_unique<ExpressionStmt>(parse_jsx_expr());
+    }
+    if (match(TokenType::KW_CSS)) {
+        // CSS-in-JS styling
+        return parse_css_styles();
+    }
+    if (match(TokenType::KW_HTML)) {
+        // HTML template
+        return parse_html_template();
+    }
+    if (match(TokenType::KW_IMPORT_PYTHON)) {
+        // Import Python module from .nvw
+        return parse_python_import();
+    }
+    if (match(TokenType::KW_EXPORT_JS)) {
+        // Export function to JavaScript
+        return parse_js_export();
+    }
+    if (match(TokenType::KW_UNSAFE)) {
+        return parse_unsafe_block();
+    }
     return parse_expression_stmt();
 }
 
@@ -276,11 +356,17 @@ std::unique_ptr<Stmt> Parser::parse_function_decl(bool is_async) {
 
     bool is_extern = false;
     std::string extern_name;
+    std::string extern_lang;
     if (match(TokenType::KW_EXTERN)) {
         is_extern = true;
         if (check(TokenType::STRING_LITERAL)) {
             extern_name = advance().value;
         }
+    } else if (match(TokenType::KW_MOJI)) {
+        is_extern = true;
+        extern_lang = "moji";
+        // After `moji`, expect optional string literal for function name
+        // or proceed with function parameters
     }
 
     consume(TokenType::LPAREN, "Expected '(' before function parameters.");
@@ -310,7 +396,9 @@ std::unique_ptr<Stmt> Parser::parse_function_decl(bool is_async) {
     // Parse block body
     std::unique_ptr<BlockStmt> body = parse_block_stmt("function '" + name + "'");
 
-    return std::make_unique<FunctionDeclStmt>(name, std::move(params), ret_type, has_ret, std::move(body), is_async, is_extern, extern_name, loc);
+return std::make_unique<FunctionDeclStmt>(name, 
+std::move(params), ret_type, has_ret, std::move(body), is_async, is_extern,
+extern_name, extern_lang, loc);
 }
 
 // Class Declaration: `class Vector extends Base implements Drawable:`
@@ -412,7 +500,7 @@ std::unique_ptr<Stmt> Parser::parse_interface_decl() {
             error(peek(), "Expected newline or semicolon after interface method declaration.");
         }
 
-        methods.push_back(std::make_unique<FunctionDeclStmt>(m_name, std::move(params), ret_type, has_ret, nullptr, is_async, false, "", method_name_tok.location));
+        methods.push_back(std::make_unique<FunctionDeclStmt>(m_name, std::move(params), ret_type, has_ret, nullptr, is_async, false, "", "", method_name_tok.location));
     }
 
     consume(TokenType::DEDENT, "Expected dedent at the end of interface body.");
@@ -537,6 +625,32 @@ std::unique_ptr<Stmt> Parser::parse_try_catch_stmt() {
     return std::make_unique<TryCatchStmt>(std::move(try_block), std::move(catch_blocks), std::move(finally_block), loc);
 }
 
+// Mojo compatibility: Python-style `pass` statement
+std::unique_ptr<Stmt> Parser::parse_pass_stmt() {
+    SourceLocation loc = previous().location;
+    return std::make_unique<EmptyStmt>(loc);
+}
+
+// Mojo compatibility: Python-style `raise` statement
+std::unique_ptr<Stmt> Parser::parse_raise_stmt() {
+    SourceLocation loc = previous().location;
+    return std::make_unique<EmptyStmt>(loc);
+}
+
+// Panic statement: `panic("message")` or `panic`
+std::unique_ptr<Stmt> Parser::parse_panic_stmt() {
+    SourceLocation loc = previous().location;
+    std::unique_ptr<Expr> message = nullptr;
+    if (!check(TokenType::NEWLINE) && !check(TokenType::SEMICOLON) && !check(TokenType::DEDENT) && !is_at_end()) {
+        message = parse_expression(Precedence::LOWEST);
+    }
+    if (!match(TokenType::NEWLINE) && !match(TokenType::SEMICOLON) && !is_at_end() &&
+        peek().type != TokenType::DEDENT && peek().type != TokenType::RBRACE) {
+        error(peek(), "Expected newline or semicolon after panic statement.");
+    }
+    return std::make_unique<PanicStmt>(std::move(message));
+}
+
 // Go statement: `go calculate(x)`
 std::unique_ptr<Stmt> Parser::parse_go_stmt() {
     SourceLocation loc = previous().location;
@@ -550,6 +664,26 @@ std::unique_ptr<Stmt> Parser::parse_go_stmt() {
     }
 
     return std::make_unique<GoStmt>(std::move(call), loc);
+}
+
+// Defer statement: `defer cleanup()`
+std::unique_ptr<Stmt> Parser::parse_defer_stmt() {
+    SourceLocation loc = previous().location;
+    
+    // Parse the block to defer
+    std::unique_ptr<BlockStmt> body = parse_block_stmt("defer block");
+    
+    return std::make_unique<DeferStmt>(std::move(body), loc);
+}
+
+// Unsafe block: `unsafe { ... }`
+std::unique_ptr<Stmt> Parser::parse_unsafe_block() {
+    SourceLocation loc = previous().location;
+    
+    // Parse the block content
+    std::unique_ptr<BlockStmt> body = parse_block_stmt("unsafe block");
+    
+    return std::make_unique<UnsafeBlockStmt>(std::move(body), loc);
 }
 
 // Expression Statement
@@ -567,7 +701,7 @@ std::unique_ptr<Stmt> Parser::parse_expression_stmt() {
                 t == TokenType::KW_LET || t == TokenType::KW_VAR || t == TokenType::KW_IF ||
                 t == TokenType::KW_MATCH || t == TokenType::KW_WHILE || t == TokenType::KW_FOR ||
                 t == TokenType::KW_RETURN || t == TokenType::KW_TRY || t == TokenType::KW_THROW ||
-                t == TokenType::KW_GO) {
+                t == TokenType::KW_GO || t == TokenType::KW_DEFER || t == TokenType::KW_UNSAFE) {
                 break;
             }
             advance();
@@ -864,9 +998,325 @@ Precedence Parser::get_precedence(TokenType type) const {
         case TokenType::LBRACKET:
             return Precedence::INDEX;
             
+        // .nvw Python/React precedence (lower than regular expressions)
+        case TokenType::KW_PYTHON:
+        case TokenType::KW_JSX:
+        case TokenType::KW_CSS:
+        case TokenType::KW_HTML:
+        case TokenType::KW_IMPORT_PYTHON:
+        case TokenType::KW_EXPORT_JS:
+            return Precedence::LOWEST;
+            
         default:
             return Precedence::LOWEST;
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION 6: .nvw Python/React Parsing Helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Python FFI block: `python: ...` or `python: import "module"`
+std::unique_ptr<Stmt> Parser::parse_python_ffi_block() {
+    SourceLocation loc = previous().location;
+    // Parse the python block body - contains import statements
+    std::unique_ptr<BlockStmt> body = parse_block_stmt("python FFI block");
+    std::vector<std::unique_ptr<Stmt>> imports;
+    if (body) {
+        imports = std::move(body->statements);
+    }
+    return std::make_unique<PythonFFIBlockStmt>(std::move(imports), loc);
+}
+
+// JSX expression: `<div>Hello</div>`, `<Component/>, or `{expr}`
+std::unique_ptr<Expr> Parser::parse_jsx_expr() {
+    SourceLocation loc = previous().location;
+    // JSX: <Tag attr={val}>children</Tag>  or  {expression}
+    if (check(TokenType::LBRACE)) {
+        // JSX expression block: {expr}
+        advance(); // consume {
+        auto expr = parse_expression(Precedence::LOWEST);
+        if (!match(TokenType::RBRACE)) {
+            error(peek(), "Expected '}' after JSX expression.");
+        }
+        return std::make_unique<JSXExprExpr>(std::move(expr), loc);
+    }
+
+    if (match(TokenType::LESS)) {
+        // JSX tag: <div> or <Component/>
+        Token tag_token;
+        if (check(TokenType::IDENTIFIER)) {
+            tag_token = advance();
+        } else {
+            error(peek(), "Expected tag name in JSX.");
+            tag_token = Token{TokenType::IDENTIFIER, "div", previous().location};
+        }
+
+        bool self_closing = false;
+        std::unique_ptr<Expr> children = nullptr;
+
+        // Parse attributes until '>' or '/>'
+        while (!is_at_end() && !check(TokenType::GREATER) && !check(TokenType::SLASH_GREATER)) {
+            if (check(TokenType::IDENTIFIER)) {
+                advance(); // attribute name
+                if (match(TokenType::EQUAL)) {
+                    parse_expression(Precedence::LOWEST); // attribute value
+                }
+            } else {
+                advance();
+            }
+        }
+
+        if (match(TokenType::SLASH_GREATER)) {
+            self_closing = true;
+        } else if (match(TokenType::GREATER)) {
+            // Parse children until the closing tag </name>
+            if (!check(TokenType::LESS)) {
+                Token child = advance();
+                children = std::make_unique<LiteralExpr>(child);
+            }
+            // Consume closing tag: </name> (or </name)
+            match(TokenType::LESS);
+            match(TokenType::SLASH);
+            if (check(TokenType::IDENTIFIER)) advance();
+            match(TokenType::GREATER);
+        }
+
+        return std::make_unique<JSXTagExpr>(tag_token.value, std::move(children), self_closing, loc);
+    }
+
+    error(peek(), "Expected '<' or '{' after 'jsx'.");
+    return nullptr;
+}
+
+// CSS-in-JS styles: `css: ...`
+std::unique_ptr<Stmt> Parser::parse_css_styles() {
+    SourceLocation loc = previous().location;
+    // Parse CSS content - for .nvw CSS-in-JS
+    std::string css_content;
+    // Simplified: read until semicolon or newline
+    if (check(TokenType::STRING_LITERAL)) {
+        css_content = advance().value;
+    }
+    return std::make_unique<CSSStylesStmt>(css_content, loc);
+}
+
+// HTML template: `html: ...`
+std::unique_ptr<Stmt> Parser::parse_html_template() {
+    SourceLocation loc = previous().location;
+    // Parse HTML template content
+    std::string html_content;
+    if (check(TokenType::STRING_LITERAL)) {
+        html_content = advance().value;
+    }
+    return std::make_unique<HTMLTemplateStmt>(html_content, loc);
+}
+
+// Python import from .nvw: `import_python "module"`
+std::unique_ptr<Stmt> Parser::parse_python_import() {
+    SourceLocation loc = previous().location;
+    // Parse the module name
+    std::string module_name;
+    if (check(TokenType::STRING_LITERAL)) {
+        module_name = advance().value;
+    } else if (check(TokenType::IDENTIFIER)) {
+        module_name = advance().value;
+    }
+    return std::make_unique<PythonImportStmt>(module_name, loc);
+}
+
+// JS export: `export_js fn name`
+std::unique_ptr<Stmt> Parser::parse_js_export() {
+    SourceLocation loc = previous().location;
+    // Parse the function name to export
+    std::string func_name;
+    if (check(TokenType::IDENTIFIER)) {
+        func_name = advance().value;
+    }
+    return std::make_unique<JSExportStmt>(func_name, loc);
+}
+
+// Mojo-style public visibility declaration
+std::unique_ptr<Stmt> Parser::parse_pub_decl() {
+    SourceLocation loc = previous().location;
+    // Mojo: `pub` can modify following declarations
+    // For now, just consume and return empty
+    return std::make_unique<EmptyStmt>(loc);
+}
+
+// Mojo-style struct declaration
+std::unique_ptr<Stmt> Parser::parse_struct_decl() {
+    SourceLocation loc = previous().location;
+    Token name_token = consume(TokenType::IDENTIFIER, "Expected struct name.");
+    std::string name = name_token.value;
+    
+    // Parse fields
+    std::vector<FunctionParam> fields;
+    if (check(TokenType::LBRACE)) {
+        advance(); // consume {
+        while (!check(TokenType::RBRACE) && !is_at_end()) {
+            if (match(TokenType::KW_OWN) || match(TokenType::KW_BORROW) || match(TokenType::KW_MUT)) {
+                // Parse field with ownership
+                // ...
+            }
+            // Parse field name
+            Token field_name = consume(TokenType::IDENTIFIER, "Expected field name.");
+            // Parse field type
+            // ...
+            // Skip to next field or semicolon
+            if (!match(TokenType::COMMA)) break;
+        }
+        consume(TokenType::RBRACE, "Expected '}' at the end of struct body.");
+    } else {
+        // Struct without braces: `struct Name field: type, field2: type`
+        // Parse fields until we hit a semicolon or another keyword
+        while (!check(TokenType::SEMICOLON) && !is_at_end() &&
+               !check(TokenType::KW_FN) && !check(TokenType::KW_CLASS) &&
+               !check(TokenType::KW_INTERFACE) && !check(TokenType::KW_LET) &&
+               !check(TokenType::KW_VAR) && !check(TokenType::KW_IF) &&
+               !check(TokenType::KW_WHILE) && !check(TokenType::KW_FOR) &&
+               !check(TokenType::KW_RETURN) && !check(TokenType::KW_MATCH) &&
+               !check(TokenType::KW_TRY) && !check(TokenType::KW_GO) &&
+               !check(TokenType::KW_DEFER) && !check(TokenType::KW_UNSAFE)) {
+            // Parse field
+            Token field_name = consume(TokenType::IDENTIFIER, "Expected field name.");
+            // Skip type annotation if present
+            match(TokenType::COLON);
+            // Skip until comma or semicolon
+            if (check(TokenType::COMMA)) advance();
+            else if (check(TokenType::SEMICOLON)) break;
+        }
+        consume(TokenType::SEMICOLON, "Expected ';' at the end of struct declaration.");
+    }
+    
+    return std::make_unique<EmptyStmt>(loc);
+}
+
+// Mojo-style enum declaration
+std::unique_ptr<Stmt> Parser::parse_enum_decl() {
+    SourceLocation loc = previous().location;
+    Token name_token = consume(TokenType::IDENTIFIER, "Expected enum name.");
+    std::string name = name_token.value;
+    
+    // Parse enum values
+    // For now, just consume and return
+    consume(TokenType::COLON, "Expected ':' to start enum body.");
+    consume(TokenType::NEWLINE, "Expected newline after enum declaration.");
+    consume(TokenType::INDENT, "Expected indented block for enum body.");
+    
+    // Skip enum body
+    while (!check(TokenType::DEDENT) && !is_at_end()) {
+        if (match(TokenType::NEWLINE)) continue;
+        // Skip identifiers (enum values)
+        if (check(TokenType::IDENTIFIER)) advance();
+    }
+    consume(TokenType::DEDENT, "Expected dedent at the end of enum body.");
+    
+    return std::make_unique<EmptyStmt>(loc);
+}
+
+// Mojo-style using declaration
+std::unique_ptr<Stmt> Parser::parse_using_decl() {
+    SourceLocation loc = previous().location;
+    // Mojo: `using` can bring types into scope
+    // For now, consume until semicolon
+    if (check(TokenType::SEMICOLON)) {
+        return std::make_unique<EmptyStmt>(loc);
+    }
+    // Skip until semicolon
+    while (!check(TokenType::SEMICOLON) && !is_at_end()) advance();
+    consume(TokenType::SEMICOLON, "Expected ';' at the end of using declaration.");
+    return std::make_unique<EmptyStmt>(loc);
+}
+
+// Python-style with statement: `with resource: ...`
+std::unique_ptr<Stmt> Parser::parse_with_stmt() {
+    SourceLocation loc = previous().location;
+    // Parse the context expression(s) up to the block
+    while (!is_at_end() && !check(TokenType::COLON) && !check(TokenType::LBRACE)) {
+        advance();
+    }
+    // Consume the body so we stay synchronized; execution semantics are
+    // handled by the interpreter/codegen layers.
+    std::unique_ptr<BlockStmt> body = parse_block_stmt("with block");
+    if (!body) return nullptr;
+    return std::make_unique<EmptyStmt>(loc);
+}
+
+// Mojo-style type cast expression
+std::unique_ptr<Expr> Parser::parse_cast_expr() {
+    SourceLocation loc = previous().location;
+    // `cast type(expression)`
+    std::string target_type;
+    if (check(TokenType::IDENTIFIER)) {
+        target_type = advance().value;
+    } else {
+        error(peek(), "Expected type name after 'cast'.");
+        return nullptr;
+    }
+    if (!check(TokenType::LPAREN)) {
+        error(peek(), "Expected '(' after type name in 'cast'.");
+        return nullptr;
+    }
+    advance(); // consume (
+    auto expr = parse_expression(Precedence::LOWEST);
+    consume(TokenType::RPAREN, "Expected ')' after expression in 'cast'.");
+    return std::make_unique<CastExpr>(target_type, std::move(expr), loc);
+}
+
+// Mojo-style sizeof expression
+std::unique_ptr<Expr> Parser::parse_sizeof_expr() {
+    SourceLocation loc = previous().location;
+    // `sizeof(type)` or `sizeof type` — emit call to builtin size_of
+    std::unique_ptr<Expr> inner = nullptr;
+    if (match(TokenType::LPAREN)) {
+        inner = parse_expression(Precedence::LOWEST);
+        consume(TokenType::RPAREN, "Expected ')' after expression in 'sizeof'.");
+    } else if (check(TokenType::IDENTIFIER)) {
+        inner = std::make_unique<IdentifierExpr>(advance().value, previous().location);
+    }
+    std::vector<std::unique_ptr<Expr>> args;
+    args.push_back(std::move(inner));
+    return std::make_unique<CallExpr>(
+        std::make_unique<IdentifierExpr>("size_of", loc), std::move(args), loc);
+}
+
+// Mojo-style alignof expression
+std::unique_ptr<Expr> Parser::parse_alignof_expr() {
+    SourceLocation loc = previous().location;
+    // `alignof(type)` or `alignof type` — emit call to builtin align_of
+    std::unique_ptr<Expr> inner = nullptr;
+    if (match(TokenType::LPAREN)) {
+        inner = parse_expression(Precedence::LOWEST);
+        consume(TokenType::RPAREN, "Expected ')' after expression in 'alignof'.");
+    } else if (check(TokenType::IDENTIFIER)) {
+        inner = std::make_unique<IdentifierExpr>(advance().value, previous().location);
+    }
+    std::vector<std::unique_ptr<Expr>> args;
+    args.push_back(std::move(inner));
+    return std::make_unique<CallExpr>(
+        std::make_unique<IdentifierExpr>("align_of", loc), std::move(args), loc);
+}
+
+// Mojo tensor type declaration
+std::unique_ptr<Stmt> Parser::parse_tensor_type() {
+    SourceLocation loc = previous().location;
+    // `Tensor[shape]` or `Tensor`
+    // For now, just consume and return empty
+    // Full implementation would parse tensor dimensions
+    return std::make_unique<EmptyStmt>(loc);
+}
+
+// Mojo matrix type declaration
+std::unique_ptr<Stmt> Parser::parse_matrix_type() {
+    SourceLocation loc = previous().location;
+    // `Matrix[shape]` or `Matrix`
+    // For now, just consume and return empty
+    // Full implementation would parse matrix dimensions
+    return std::make_unique<EmptyStmt>(loc);
+}
+
+// ── End Mojo Compatibility Parsing ──────────────────────────────────────────
+// Python/React Bridge Built-in Registration
 
 } // namespace novium

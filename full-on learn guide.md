@@ -445,7 +445,7 @@ let d: string = int_to_string(a)  // Or: "${a}" / ${a}
 
 #### 3. Type Errors the Compiler Catches
 ```novium
-// ‚ùå These give COMPILE ERRORS:
+// ‚å These give COMPILE ERRORS:
 fn broken() void:
     let x: int = "hello"  // Type mismatch
     let result: int = "hello" + "world"  // Can't add strings to int
@@ -651,7 +651,7 @@ fn safe_divide_demo() void:
 ### Match Exhaustiveness
 The compiler **requires** exhaustive match coverage:
 ```novium
-// ‚ùå This gives COMPILE ERROR (non-exhaustive):
+// ‚å This gives COMPILE ERROR (non-exhaustive):
 fn bad_match(n: int) string:
     match n:
         0 => "zero"
@@ -1059,7 +1059,7 @@ fn safe_divide_demo() void:
 ### Match Exhaustiveness
 The compiler **requires** exhaustive match coverage:
 ```novium
-// ‚ùå This gives COMPILE ERROR (non-exhaustive):
+// ‚å This gives COMPILE ERROR (non-exhaustive):
 fn bad_match(n: int) string:
     match n:
         0 => "zero"
@@ -2087,7 +2087,7 @@ fn main() void:
 ### Commenting Documentation
 ```novium
 // Good comments explain WHY, not WHAT
-// ‚ùå Bad: // increment i by 1
+// ‚å Bad: // increment i by 1
 // ‚úÖ Good: // Move to next iteration of the loop
 
 // Document function purpose
@@ -2111,7 +2111,7 @@ if result is none:
 else:
     print("Result: ${result}")
 
-// ‚ùå Bad: Ignore errors
+// ‚å Bad: Ignore errors
 let result: optional int = divide(10, 0)
 // Don't forget to check! Compiler will warn if you do,
 // but at runtime: result is none, must handle
@@ -2140,7 +2140,7 @@ fn fib_iter(n: int) int:
         i = i + 1
     return a
 
-// ‚ùå Bad: Unnecessary deep recursion without guard
+// ‚å Bad: Unnecessary deep recursion without guard
 fn fib_bad(n: int) int:
     if n <= 1:
         return n
@@ -2151,7 +2151,7 @@ fn fib_bad(n: int) int:
 fn fast_add(a: int, b: int) int:  // Annotation helps compiler optimize
     return a + b
 
-// ‚ùå Bad: Untyped hot paths (still works, slightly slower)
+// ‚å Bad: Untyped hot paths (still works, slightly slower)
 fn slow_add(a, b) int:
     return a + b
 ```
@@ -2177,7 +2177,7 @@ fn test_fibonacci() void:
     test_fibonacci()
 # endif
 
-// ‚ùå Bad: Only test happy path
+// ‚å Bad: Only test happy path
 fn bad_test() void:
     assert(fibonacci(5) == 5)  // Only one test, no edge cases
 ```
@@ -2198,7 +2198,7 @@ fn bad_test() void:
 
 #### 1. Use Iterative Over Recursive
 ```novium
-// ‚ùå Recursive: O(2^n) time, O(n) stack
+// ‚å Recursive: O(2^n) time, O(n) stack
 fn fib_recursive(n: int) int:
     if n <= 1:
         return n
@@ -2232,7 +2232,7 @@ fn add_general(a, b) int:
 
 #### 2. Avoid Unnecessary Allocations
 ```novium
-// ‚ùå Allocating on every call
+// ‚å Allocating on every call
 fn create_string(s: string) string:
     return s + " suffix"  // New string allocated each call
 
@@ -2289,7 +2289,7 @@ for i in 0..1000:
 // ‚úÖ Use built-in math (may use CPU instructions)
 let result: float = cos(3.14)  // May use FPU instruction
 
-// ‚ùå Avoid software emulation when hardware available
+// ‚å Avoid software emulation when hardware available
 // (Novium's LLVM backend targets this automatically)
 ```
 
@@ -2298,7 +2298,7 @@ let result: float = cos(3.14)  // May use FPU instruction
 
 ### Pitfall 1: Forgetting to Handle `optional`
 ```novium
-// ‚ùå Pitfall: Assuming optional can be used like regular type
+// ‚å Pitfall: Assuming optional can be used like regular type
 let x: optional int = divide(10, 0)
 print(${x})  // COMPILE ERROR: x is optional, must handle both cases
 
@@ -2313,7 +2313,7 @@ match x:
 
 ### Pitfall 2: Moving Values Unintentionally
 ```novium
-// ‚ùå Pitfall: Value moved without realizing
+// ‚å Pitfall: Value moved without realizing
 let s: string = "hello"
 let process: fn(string) void = fn(s: string) void:
     print(${s})
@@ -2333,7 +2333,7 @@ process(*s_ref)  // Dereference and pass
 
 ### Pitfall 2: Non-exhaustive Match
 ```novium
-// ‚ùå Pitfall: Match not exhaustive (compile error)
+// ‚å Pitfall: Match not exhaustive (compile error)
 fn describe(n: int) string:
     match n:
         0 => "zero"
@@ -2349,7 +2349,7 @@ fn describe(n: int) string:
 
 ### Pitfall 3: Infinite Recursion
 ```novium
-// ‚ùå Pitfall: No recursion depth guard
+// ‚å Pitfall: No recursion depth guard
 fn infinite_recursive(n: int) int:
     return n * infinite_recursive(n - 1)  // Never reaches base case!
     // Stack overflow at runtime (or compile error with guard)
@@ -2365,7 +2365,7 @@ fn safe_recursive(n: int, depth: int = 0) int:
 
 ### Pitfall 4: String Index Out of Bounds
 ```novium
-// ‚ùå Pitfall: Unchecked string indexing
+// ‚å Pitfall: Unchecked string indexing
 let s: string = "hi"
 let char: string = s[100]  // ERROR: index 100 out of bounds for length 2
 
@@ -2384,7 +2384,7 @@ let char: string = s[0]  // Safe: index 0 exists
 
 ### Pitfall 5: Forgetting `own` Semantics
 ```novium
-// ‚ùå Pitfall: Unexpected ownership behavior
+// ‚å Pitfall: Unexpected ownership behavior
 let s: string = "data"
 fn process(own s: string) void:
     print(${s})
@@ -2401,7 +2401,7 @@ process(own s)  // s transferred; CAN'T use after
 
 ### Pitfall 5: Misusing `async` and `go`
 ```novium
-// ‚ùå Pitfall: Misconcurrency patterns
+// ‚å Pitfall: Misconcurrency patterns
 // Spawning too many goroutines without limit
 go fn:
     // Some heavy work
@@ -2421,12 +2421,12 @@ async fn main() void:
 
 ### Pitfall 6: API Endpoint Without Documentation
 ```novium
-// ‚ùå Pitfall: API endpoint without annotations
+// ‚å Pitfall: API endpoint without annotations
 #[get("/data")]
 fn get_data() string:
     return "some data"
 
-// ‚ùå No docs generated; users don't know parameters/responses
+// ‚å No docs generated; users don't know parameters/responses
 
 // ‚úÖ Fix: Add proper annotations
 #[get("/data")]
@@ -2454,7 +2454,7 @@ fn get_data() string:
 
 #### 1. Use Iterative Over Recursive
 ```novium
-// ‚ùå Recursive: O(2^n) time, O(n) stack
+// ‚å Recursive: O(2^n) time, O(n) stack
 fn fib_recursive(n: int) int:
     if n <= 1:
         return n
@@ -2488,7 +2488,7 @@ fn add_general(a, b) int:
 
 #### 2. Avoid Unnecessary Allocations
 ```novium
-// ‚ùå Allocating on every call
+// ‚å Allocating on every call
 fn create_string(s: string) string:
     return s + " suffix"  // New string allocated each call
 
@@ -2545,7 +2545,7 @@ for i in 0..1000:
 // ‚úÖ Use built-in math (may use CPU instructions)
 let result: float = cos(3.14)  // May use FPU instruction
 
-// ‚ùå Avoid software emulation when hardware available
+// ‚å Avoid software emulation when hardware available
 // (Novium's LLVM backend targets this automatically)
 ```
 ---
@@ -2966,7 +2966,77 @@ Required elements:
 
 ---
 
-*Guide generated November 2026. For the latest updates, check the Novium repository.*
+*Novium v0.2.0 - Full-Stack Trio Complete: 30/30 sprints done, cross-variant interoperability, Mojo compatibility, trio bridge execution, binary wire protocol v0x200. Guide generated November 2026. For the latest updates, check the Novium repository.*
 
 ---
 *(Done. The file has been written to `C:\Users\uchih\Novium Programming language\full-on learn guide.md`.)*
+
+### 21. Cross-Language Interoperability
+
+Novium v0.2.0 delivers seamless interoperability across all three language variants:
+
+- **.nvm <-> .nvi**: Import and call functions between systems compiler and full-stack interpreter; automatic generation/sweep GC coordination
+- **.nvm <-> .nvw**: Compile .nvm modules to Wasm+JS for web execution; DataPacket tensor metadata interop
+- **.nvi <-> .nvw**: Trio bridge execution with WASM module loading/calling; sync_globals_across_trio; call_* bridge functions
+- **Mojo Compatibility**: Python/Mojo superset features with native compilation targets; pub, struct, enum, pass, raise, with, cast, sizeof, alignof, Tensor, Matrix keywords
+- **Trio Bridge Functions**: import_module, call_nvm_function_from_nvi, call_nvi_function_from_nvm, call_nvw_function, serialize_to_datapacket, deserialize_from_datapacket, sync_globals_across_trio, trio_compatibility_info()
+- **Wire Protocol**: Binary format (with JSON fallback) using "NOVI" magic bytes, version 0x200, TensorMeta, ExecutionCommandPayload, type mappings, dynamic_axes field, format_version field
+
+### 22. Mojo Language Compatibility
+
+Novium v0.2.0 extends Python/Mojo superset features with native compilation targets:
+
+**Keywords Added for Mojo Compatibility**:
+- `pub` - Public access modifier
+- `struct` - Value type definition
+- `enum` - Enumeration type
+- `pass` - Placeholder/empty function body
+- `raise` - Exception raising (optional/error value style)
+- `with` - Context manager / scope boundary
+- `cast` - Type conversion operator
+- `sizeof` - Size of type in bytes
+- `alignof` - Alignment requirement of type
+- `Tensor` - Tensor type for numerical computations
+- `Matrix` - Matrix type for linear algebra
+
+**Mojo Interop Features**:
+- Python/Mojo syntax subset compatibility
+- Native compilation targets: .nvm (systems), .nvi (interpreted), .nvw (Wasm/JS)
+- Ownership types with flexibility (automatic GC in .nvi, deterministic in .nvm)
+- Tensor and Matrix types for numerical computing
+- FFI bridge to C via unified_connections.h
+
+### 23. Trio Bridge Execution
+
+Novium v0.2.0 trio bridge enables cross-variant function calls:
+
+```novium
+// Import a .nvm module from .nvi
+import_module("math.nvm")
+
+// Call .nvm function from .nvi
+result = call_nvm_function_from_nvi("add", 5, 3)
+
+// Call .nvi function from .nvm
+result = call_nvi_function_from_nvm("double", 7)
+
+// Call .nvw function
+result = call_nvw_function("render", width, height)
+
+// Serialize/Deserialize DataPacket
+packet = serialize_to_datapacket(tensor, "float", [1,2,3])
+data = deserialize_from_datapacket(packet)
+
+// Sync globals across trio
+sync_globals_across_trio()
+
+# Trio compatibility info
+trio_info = trio_compatibility_info()
+```
+
+**Bridge Execution Functions (bridge_execution.h:Sprints 25-29)**:
+- WasmModuleInterface abstract class with WasmModuleLoadResult
+- Concrete WasmModuleNVI/.nvw implementations
+- CallConvention ABI standard for function calling
+- Factory functions for each variant pair
+- Trio compatibility methods for global state sync

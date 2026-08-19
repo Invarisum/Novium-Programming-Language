@@ -1,9 +1,12 @@
 # Build artifacts
 build/
+build-*/
 *.exe
 *.dll
 *.so
 *.dylib
+*.a
+*.lib
 
 # IDE and editor settings
 .vscode/
@@ -15,16 +18,38 @@ build/
 # C++-specific
 *.o
 *.obj
+*.gch
+*.pch
 *.gcno
 *.gcda
 *.ll
 *.bc
+*.profraw
 
 # CMake
+CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
+CMakeScripts/
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+build.ninja
+rules.ninja
+.ninja_deps
+.ninja_log
+
+# Test outputs
+test_output.txt
+LastTest.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
 
 # Misc
 *.tmp
 *.temp
 .DS_Store
+Thumbs.db

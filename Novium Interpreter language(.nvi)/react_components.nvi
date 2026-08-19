@@ -1,0 +1,63 @@
+// =============================================================================
+# React Components for .nvi Interpreter
+# Demonstrates: React component definitions and usage patterns
+# =============================================================================
+
+# Define a React component using JSX syntax
+let Counter = <div>
+    <button on_click={increment}>
+        Count: {count}
+    </button>
+    <p>Total clicks: {total_clicks}</p>
+</div>
+
+# Alternative: Function component syntax
+let Greeting = <fn(name: string) -> div>
+    <h1>Hello, {name}!</h1>
+    <p>Welcome to Novium React integration.</p>
+</fn>
+
+# Component with state
+let CounterComponent = <fn() -> div>
+    let count = use_state(0)
+    
+    let increment = fn()
+        count = count + 1
+    end
+    
+    <div>
+        <h2>Counter: {count}</h2>
+        <button on_click={increment}>Increment</button>
+    </div>
+</fn>
+
+# Create element from component
+let my_counter = react_create("CounterComponent", {})
+print("Created CounterComponent: " + my_counter)
+
+# Render component with props
+let rendered = react_render("Greeting", {"name": "Alice"})
+print("Rendered Greeting: " + rendered)
+
+# Nested components
+let App = <div>
+    <Greeting name="Bob" />
+    <CounterComponent />
+</div>
+
+let app_element = react_create("App", {})
+let app_render = react_render("App", {})
+print("App component rendered: " + app_render)
+
+// Demo: Python data -> React props
+python_import("json")
+let json_data = python_call("json.dumps", {"status": "active", "score": 95})
+print("JSON from Python: " + json_data)
+
+# Parse JSON and pass to React
+let parsed = python_call("json.loads", json_data)
+let props_from_python = {"data": parsed}
+let react_with_python = react_render("DataDisplay", props_from_python)
+print("React with Python data: " + react_with_python)
+
+print("React components demo complete!")

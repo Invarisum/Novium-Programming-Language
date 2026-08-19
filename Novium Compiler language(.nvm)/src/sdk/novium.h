@@ -3,21 +3,66 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <stddef.h>
+
+// ============================================================================
 // C ABI type mappings
-#define NOVIUM_C_TYPE(int)     int64_t
-#define NOVIUM_C_TYPE(string) { const char*; size_t }
-#define NOVIUM_C_TYPE(array) { void*; size_t }
-#define NOVIUM_C_TYPE(slice) { const char*; size_t }
+// ============================================================================
 
+// Novium types map to standard C types:
+//   int        -> int64_t     float  -> double
+//   int32      -> int32_t     bool   -> _Bool
+//   string/slice -> { const char*; size_t }  (see NoviumString/NoviumSlice below)
+
+// ============================================================================
 // Version info
-#define NOVIUM_SDK_VERSION "0.1.5"
+// ============================================================================
 
+#define NOVIUM_SDK_VERSION "0.1.7"
+
+// ============================================================================
 // Build configuration
-#define NOVIUM_SDK_PROFILE "debug"
-#define NOVIUM_SDK_TARGET "native"
+// ============================================================================
 
-// Function declarations for SDK runtime
+#define NOVIUM_SDK_PROFILE "debug"
+#define NOVIUM_SDK_TARGET  "native"
+
+// ============================================================================
+// Function declarations for SDK runtime (C ABI)
+// ============================================================================
+
+// Memory allocation
 extern void* novium_malloc(size_t size);
 extern void novium_free(void* ptr);
+
+// Print function
 extern void novium_print(const char* s);
+
+// Simple addition
 extern int novium_add(int a, int b);
+
+// ============================================================================
+// Convenience macros for type usage in FFI
+// ============================================================================
+
+// Define a Novium integer type for C FFI
+#define NOVIUM_INT int32_t
+
+// Define a Novium string type for C FFI (pointer + length)
+typedef struct {
+    const char* data;
+    size_t length;
+} NoviumString;
+
+// Define a Novium slice type for C FFI
+typedef struct {
+    const char* data;
+    size_t length;
+} NoviumSlice;
+
+// ============================================================================
+// Null pointer macro
+// ============================================================================
+
+#define NOVIUM_NULL ((void*)0)

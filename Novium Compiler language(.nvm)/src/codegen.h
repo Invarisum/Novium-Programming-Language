@@ -12,7 +12,10 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <fstream>
+#include <unordered_map>
 #include "parser/ast.h"
+#include "sema/types.h"
 
 namespace novium {
 
@@ -24,8 +27,9 @@ class LLVMContextWrapper;
 // ============================================================================
 
 struct CodeGenConfig {
+    enum class OptimizationLevel { NONE, BASIC, AGGRESSIVE };
+    OptimizationLevel optimization_level = OptimizationLevel::BASIC;
     bool emit_debug_info = true;
-    bool optimize_ir = true;
     std::string target_triple = "";
     std::string cpu = "generic";
     bool enable_fp_contract = false;
@@ -48,19 +52,17 @@ struct CodeGenResult {
         LlvmModule& operator=(LlvmModule&&) = default;
 
         // Access the underlying LLVM Module
-        void* get() const { return module_.get(); }
+        void* get() const { return module_; }
         // Get the module name
-        std::string name() const { return module_->getName().str(); }
+        std::string name() const { return "novium-module"; }
 
     private:
-        // Use unique_ptr with custom deleter for LLVM ownership
-        struct DummyDeleter {
-            void operator()(void* p) const {
-                // Module is managed by LLVM's context, don't delete directly
-            }
-        };
+        // Raw pointer to the llvm::Module (owned by LLVM's context)
+        void* module_ = nullptr;
         // Friend codegen class for creation
         friend class LlvmCodeGen;
+
+    public:
         LlvmModule() = default;
     };
 
@@ -86,6 +88,10 @@ public:
 
     // Main entry point: generate IR from a parsed and type-checked program
     CodeGenResult generate(const std::vector<std::unique_ptr<novium::Stmt>>& program);
+
+    // Generate C ABI header file from type information
+    // Writes the header to the given output path
+    bool generate_abi_header(const std::string& output_path);
 
     // Get the generated module
     const CodeGenResult::LlvmModule& get_module() const { return result_.module; }
@@ -150,16 +156,17 @@ private:
     void emit_print(void* value);
     void emit_println(void* value);
 
-    // LLVM context and builder management
+    // LLVM context and builder management (opaque handles; LLVM types live
+    // only inside codegen.cpp when built with -DNOVIUM_WITH_LLVM=ON)
     class LlvmContextWrapper* ctx_;
     // IR builder (positioned at end of basic block)
     class LlvmBuilder* builder_;
-    // Module being built
-    std::unique_ptr<class LlvmModule> module_;
+    // Module being built (opaque llvm::Module*)
+    void* module_ = nullptr;
     // Map from Novium variable names to LLVM values
     std::unordered_map<std::string, void*> var_map_;
     // Map from function names to LLVM functions
-    std::unordered_map<std::string, class LlvmFunction*> func_map_;
+    std::unordered_map<std::string, void*> func_map_;
 };
 
 // ============================================================================
@@ -171,10 +178,18 @@ inline unsigned llvm_type_kind(novium::TypeKind kind) {
     switch (kind) {
         case novium::TypeKind::VOID: return 0;
         case novium::TypeKind::BOOL: return 1;
-        case novium::TypeKind::INT: return 2;
-        case novium::TypeKind::FLOAT: return 3;
-        case novium::TypeKind::STRING: return 4;
-        case novium::TypeKind::NEVER: return 5;
+        case novium::TypeKind::INT8: return 2;
+        case novium::TypeKind::INT16: return 3;
+        case novium::TypeKind::INT32: return 4;
+        case novium::TypeKind::INT: return 5;
+        case novium::TypeKind::UINT8: return 6;
+        case novium::TypeKind::UINT16: return 7;
+        case novium::TypeKind::UINT32: return 8;
+        case novium::TypeKind::UINT: return 9;
+        case novium::TypeKind::FLOAT16: return 10;
+        case novium::TypeKind::FLOAT: return 11;
+        case novium::TypeKind::STRING: return 12;
+        case novium::TypeKind::NEVER: return 13;
         default: return 0;
     }
 }
@@ -184,11 +199,19 @@ inline unsigned llvm_type_size_bits(novium::TypeKind kind) {
     switch (kind) {
         case novium::TypeKind::VOID: return 0;
         case novium::TypeKind::BOOL: return 1;
+        case novium::TypeKind::INT8: return 8;
+        case novium::TypeKind::INT16: return 16;
+        case novium::TypeKind::INT32: return 32;
         case novium::TypeKind::INT: return 64;  // i64
+        case novium::TypeKind::UINT8: return 8;
+        case novium::TypeKind::UINT16: return 16;
+        case novium::TypeKind::UINT32: return 32;
+        case novium::TypeKind::UINT: return 64;  // u64
+        case novium::TypeKind::FLOAT16: return 16;
         case novium::TypeKind::FLOAT: return 64;  // f64
         case novium::TypeKind::STRING: return 0;  // pointer-sized
         case novium::TypeKind::NEVER: return 0;
-        default: return 64;
+        default: return 32;
     }
 }
 

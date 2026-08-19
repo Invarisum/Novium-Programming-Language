@@ -112,6 +112,98 @@ void ASTPrinter::visit(IndexExpr* expr) {
     decrement_indent();
 }
 
+void ASTPrinter::visit(CastExpr* expr) {
+    os_ << "CastExpr -> " << expr->target_type << "\n";
+    increment_indent();
+    indent();
+    os_ << "Expression: ";
+    print(expr->expression.get());
+    decrement_indent();
+}
+
+void ASTPrinter::visit(PrintStmt* stmt) {
+    os_ << "PrintStmt: ";
+    print(stmt->value.get());
+}
+
+void ASTPrinter::visit(PrintLnStmt* stmt) {
+    os_ << "PrintLnStmt: ";
+    print(stmt->value.get());
+}
+
+void ASTPrinter::visit(EmptyStmt* stmt) {
+    os_ << "EmptyStmt\n";
+}
+
+void ASTPrinter::visit(DeferStmt* stmt) {
+    os_ << "DeferStmt\n";
+    increment_indent();
+    indent();
+    print(stmt->body.get());
+    decrement_indent();
+}
+
+void ASTPrinter::visit(UnsafeBlockStmt* stmt) {
+    os_ << "UnsafeBlockStmt\n";
+    increment_indent();
+    indent();
+    print(stmt->body.get());
+    decrement_indent();
+}
+
+void ASTPrinter::visit(PanicStmt* stmt) {
+    os_ << "PanicStmt";
+    if (stmt->message) {
+        os_ << ": ";
+        print(stmt->message.get());
+    } else {
+        os_ << "\n";
+    }
+}
+
+void ASTPrinter::visit(PythonFFIBlockStmt* stmt) {
+    os_ << "PythonFFIBlockStmt\n";
+    increment_indent();
+    for (const auto& imp : stmt->imports) {
+        indent();
+        print(imp.get());
+    }
+    decrement_indent();
+}
+
+void ASTPrinter::visit(JSXExprExpr* expr) {
+    os_ << "JSXExprExpr: ";
+    print(expr->expression.get());
+}
+
+void ASTPrinter::visit(JSXTagExpr* expr) {
+    os_ << "JSXTagExpr <" << expr->tag_name << ">"
+        << (expr->is_self_closing ? " (self-closing)" : "") << "\n";
+    increment_indent();
+    if (expr->children) {
+        indent();
+        os_ << "Children: ";
+        print(expr->children.get());
+    }
+    decrement_indent();
+}
+
+void ASTPrinter::visit(CSSStylesStmt* stmt) {
+    os_ << "CSSStylesStmt \"" << stmt->css_content << "\"\n";
+}
+
+void ASTPrinter::visit(HTMLTemplateStmt* stmt) {
+    os_ << "HTMLTemplateStmt \"" << stmt->html_content << "\"\n";
+}
+
+void ASTPrinter::visit(PythonImportStmt* stmt) {
+    os_ << "PythonImportStmt \"" << stmt->module_name << "\"\n";
+}
+
+void ASTPrinter::visit(JSExportStmt* stmt) {
+    os_ << "JSExportStmt \"" << stmt->func_name << "\"\n";
+}
+
 // ── Statement Visits ─────────────────────────────────────────────────────────
 
 void ASTPrinter::visit(BlockStmt* stmt) {

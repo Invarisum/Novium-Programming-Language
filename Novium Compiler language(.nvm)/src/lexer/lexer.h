@@ -115,14 +115,14 @@ private:
     // Each function handles one category of token.
 
     Token scan_identifier();                    // Keywords and identifiers
-    Token scan_number();                        // Integer and float literals
+    Token scan_number(std::vector<Token>& out); // Integer and float literals
     void  scan_string(std::vector<Token>& out); // String with interpolation
     Token scan_operator();                      // Operators and delimiters
 
     // ── Expression Scanning (for string interpolation) ───────────────────
     // Scans a single token inside a ${...} interpolation expression.
     // Uses the same logic as the main scanner but without indentation.
-    Token scan_expression_token();
+    Token scan_expression_token(std::vector<Token>& out);
 
     // ── Whitespace & Comments ────────────────────────────────────────────
     void skip_line_comment();   // Skip from // to end of line

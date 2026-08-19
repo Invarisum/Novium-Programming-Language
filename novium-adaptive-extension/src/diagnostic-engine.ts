@@ -43,9 +43,14 @@ export interface DiagnosticReport {
   };
 }
 
+export interface FixResult {
+  issueId: string;
+  success: boolean;
+}
+
 export class DiagnosticEngine {
   private hardware: HardwareProfile;
-  private projectRoot: string;
+  private projectRoot = '';
   private fs = require('fs').promises;
   private path = require('path');
 
@@ -53,9 +58,9 @@ export class DiagnosticEngine {
     this.hardware = hardware;
   }
 
-  async runFullDiagnosis(projectRoot: string): Promise<any> {
+  async runFullDiagnosis(projectRoot: string): Promise<DiagnosticReport> {
     this.projectRoot = projectRoot;
-    const issues: any[] = [];
+    const issues: DiagnosticIssue[] = [];
 
     // Run all diagnostic checks in parallel
     const [
@@ -91,6 +96,30 @@ export class DiagnosticEngine {
       },
       metrics: await this.calculateMetrics()
     };
+  }
+
+  // Apply fixes for all fixable issues. Returns per-issue results so callers
+  // can tell which issues were actually resolved.
+  async autoFix(issues: DiagnosticIssue[]): Promise<FixResult[]> {
+    const results: FixResult[] = [];
+    for (const issue of issues) {
+      if (!issue.fixable || !issue.fix) continue;
+      try {
+        await issue.fix.apply();
+        results.push({ issueId: issue.id, success: true });
+      } catch (error: any) {
+        console.warn(`[Novium Diagnostic] Fix failed for ${issue.id}: ${error}`);
+        if (issue.fix.rollback) {
+          try {
+            await issue.fix.rollback();
+          } catch (rollbackError) {
+            console.warn(`[Novium Diagnostic] Rollback failed for ${issue.id}: ${rollbackError}`);
+          }
+        }
+        results.push({ issueId: issue.id, success: false });
+      }
+    }
+    return results;
   }
 
   private async checkDependencies(): Promise<any[]> {
@@ -203,14 +232,15 @@ export class DiagnosticEngine {
                   message: 'Potential hardcoded secret detected',
                   description: 'A potential secret/key has been found in source file.',
                   fixable: true,
-                  fix: {
-                    description: 'Remove hardcoded secret and use environment variable',
-                    async apply() {
-                      // Would replace secret with env var reference
-                      console.log(`Removing hardcoded secret from ${file}`);
+fix: {
+                      description: 'Remove hardcoded secret and use environment variable',
+                      async apply() {
+                        // Would replace secret with env var reference
+                        console.log(`Removing hardcoded secret from ${file}`);
+                      }
                     }
-                  }
-                });
+                  });
+                }
               }
             }
         } catch (e) {
@@ -234,7 +264,7 @@ export class DiagnosticEngine {
           }
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       issues.push({
         id: 'dep-check-error',
         severity: 'error',
@@ -278,7 +308,7 @@ export class DiagnosticEngine {
         const content = await fs.readFile(noviumConfigPath, 'utf-8');
         const targetMatch = content.match(/\[build\]\n((?:.|\n)*?)\n/);
         if (targetMatch) {
-          const targetLine = targetMatch[1].split('\n').find(l => l.includes('target='));
+          const targetLine = String(targetMatch[1] || '').split('\n').find(l => l.includes('target='));
           if (!targetLine) {
             issues.push({
               id: 'no-target-spec',
@@ -335,7 +365,7 @@ export class DiagnosticEngine {
           });
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       issues.push({
         id: 'build-config-error',
         severity: 'error',
@@ -377,55 +407,40 @@ export class DiagnosticEngine {
               }
             }
           });
-
-          // Check for SIMD optimizations based on hardware
-          if (this.hardware.cpu.simd && this.hardware.cpu.simd.includes('AVX512')) {
-            if (!content.includes('avx512')) {
-              issues.push({
-                id: 'no-avx512-optimization',
-                severity: 'info',
-                category: 'performance',
-                message: 'AVX-512 CPU detected but not enabled',
-                description: 'CPU supports AVX-512 but optimization flags are not enabled. Consider enabling AVX-512 optimizations.',
-                fixable: true,
-                fix: {
-                  description: 'Enable AVX-512 optimizations',
-                  async apply() {
-                    // Would enable AVX-512 optimizations
-                    console.log('Enabling AVX-512 optimizations');
-                  }
-                }
-              });
-            }
-          }
-
-          // Check bundle size (would need actual build output)
-          issues.push({
-            id: 'bundle-size-check',
-            severity: 'info',
-            category: 'performance',
-            message: 'Bundle size check',
-            description: 'Bundle size analysis would be performed during actual build.',
-            fixable: false
-          });
-        } else {
-          issues.push({
-            id: 'no-perf-config',
-            severity: 'warning',
-            category: 'performance',
-            message: 'No performance configuration found',
-            description: 'No performance settings detected. Run `novium-adaptive optimize` to optimize for your hardware.',
-            fixable: true,
-            fix: {
-              description: 'Optimize for hardware',
-              async apply() {
-                // Would run optimization
-                console.log('Running hardware optimization');
-              }
-            }
-          });
         }
-      } catch (error) {
+
+        // Check for SIMD optimizations based on hardware
+        if (this.hardware.cpu.simd && this.hardware.cpu.simd.includes('AVX512')) {
+          if (!content.includes('avx512')) {
+            issues.push({
+              id: 'no-avx512-optimization',
+              severity: 'info',
+              category: 'performance',
+              message: 'AVX-512 CPU detected but not enabled',
+              description: 'CPU supports AVX-512 but optimization flags are not enabled. Consider enabling AVX-512 optimizations.',
+              fixable: true,
+              fix: {
+                description: 'Enable AVX-512 optimizations',
+                async apply() {
+                  // Would enable AVX-512 optimizations
+                  console.log('Enabling AVX-512 optimizations');
+                }
+              }
+            });
+          }
+        }
+
+        // Check bundle size (would need actual build output)
+        issues.push({
+          id: 'bundle-size-check',
+          severity: 'info',
+          category: 'performance',
+          message: 'Bundle size check',
+          description: 'Bundle size analysis would be performed during actual build.',
+          fixable: false
+        });
+      }
+      } catch (error: any) {
         issues.push({
           id: 'perf-check-error',
           severity: 'error',
@@ -447,8 +462,9 @@ export class DiagnosticEngine {
     try {
       // Scan source files for hardcoded secrets
       const srcDir = path.join(this.projectRoot, 'src');
+      let files: string[] = [];
       try {
-        const files = await fs.readdir(srcDir);
+        files = await fs.readdir(srcDir);
         for (const file of files) {
           const filePath = path.join(srcDir, file);
           const stat = await fs.stat(filePath);
@@ -473,14 +489,15 @@ export class DiagnosticEngine {
                 message: 'Potential hardcoded secret detected',
                 description: 'A potential secret/key has been found in source file: ' + file,
                 fixable: true,
-                fix: {
-                  description: 'Remove hardcoded secret and use environment variable',
-                  async apply() {
-                    // Would replace secret with env var reference
-                    console.log(`Removing hardcoded secret from ${file}`);
-                  }
-                }
-              });
+fix: {
+                      description: 'Remove hardcoded secret and use environment variable',
+                      async apply() {
+                        // Would replace secret with env var reference
+                        console.log(`Removing hardcoded secret from ${file}`);
+                      }
+                    }
+                  });
+              }
             }
           }
         } catch (e) {
@@ -496,7 +513,7 @@ export class DiagnosticEngine {
             if (stat.isDirectory()) continue;
             const content = await fs.readFile(filePath, 'utf-8');
             for (const pattern of unsafePatterns) {
-              if (pattern.test(content)) {
+              if (content.includes(pattern)) {
                 issues.push({
                   id: 'unsafe-pattern-' + file,
                   severity: 'warning',
@@ -505,21 +522,21 @@ export class DiagnosticEngine {
                   message: 'Unsafe pattern detected',
                   description: 'Unsafe pattern found in source file: ' + pattern,
                   fixable: true,
-                  fix: {
-                    description: 'Replace unsafe pattern with safe alternative',
-                    async apply() {
-                      // Would replace unsafe pattern
-                      console.log(`Replacing unsafe pattern in ${file}`);
+fix: {
+                      description: 'Replace unsafe pattern with safe alternative',
+                      async apply() {
+                        // Would replace unsafe pattern
+                        console.log(`Replacing unsafe pattern in ${file}`);
+                      }
                     }
-                  }
-                });
+                  });
+                }
               }
             }
-          }
         } catch (e) {
           // ok if no src dir
         }
-      } catch (error) {
+      } catch (error: any) {
         issues.push({
           id: 'sec-check-error',
           severity: 'error',
@@ -625,7 +642,7 @@ export class DiagnosticEngine {
       }
 
       return issues;
-    } catch (error) {
+    } catch (error: any) {
       issues.push({
         id: 'style-check-error',
         severity: 'error',
@@ -779,7 +796,7 @@ export class DiagnosticEngine {
         dependencyCount: dependencyCount,
         duplicateDependencies: duplicateDependencies
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         buildTimeMs: 0,
         testCoverage: 0,
@@ -789,3 +806,4 @@ export class DiagnosticEngine {
       };
     }
   }
+}

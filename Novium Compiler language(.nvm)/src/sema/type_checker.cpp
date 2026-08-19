@@ -17,28 +17,16 @@
 #include "sema/type_checker.h"
 #include <sstream>
 #include <algorithm>
+#include <set>
 
 namespace novium {
-
-// ── Type Checker Configuration ────────────────────────────────────────────────
-
-TypeCheckConfig::TypeCheckConfig()
-    : check_ownership(true),
-      check_borrowing(true),
-      warn_unused(true),
-      warn_unreachable(true),
-      require_exhaustive_match(true),
-      infer_generics(true),
-      max_recursion_depth(1000) {}
-
-// ── Inference Context ─────────────────────────────────────────────────────────
-
-InferenceContext::InferenceContext() = default;
 
 // ── Type Checker Main Class ───────────────────────────────────────────────────
 
 TypeChecker::TypeChecker(TypeInterner& interner, SymbolTable& symbols, const TypeCheckConfig& config)
-    : interner_(interner), symbols_(symbols), config_(config), ctx_() {}
+    : interner_(interner), symbols_(symbols), config_(config), ctx_() {
+    register_builtins(symbols_, interner_);
+}
 
 void TypeChecker::check_program(const std::vector<std::unique_ptr<Stmt>>& program) {
     // Phase 1: Collect all top-level declarations (functions, classes, interfaces)
@@ -83,14 +71,6 @@ void TypeChecker::note(const std::string& message, const SourceLocation& loc) {
 // ── Phase 1: Signature Collection ─────────────────────────────────────────────
 
 void TypeChecker::collect_function_signature(FunctionDeclStmt* fn) {
-    TypeInterner local_interner;
-    SymbolTable local_symbols;
-    TypeCheckConfig local_config;
-    TypePtr interner_copy; // Not used directly, just for context
-
-    // Register builtins in a local symbol table for this function
-    register_builtins(local_symbols, local_interner);
-
     // Get return type annotation
     TypeAnnotation ret_ann = fn->return_type;
     TypePtr ret_type = annotation_to_type(ret_ann, fn->location);
@@ -108,36 +88,52 @@ void TypeChecker::collect_function_signature(FunctionDeclStmt* fn) {
 }
 
 void TypeChecker::collect_class_signature(ClassDeclStmt* cls) {
-    TypeInterner local_interner;
-    SymbolTable local_symbols;
-    TypeCheckConfig local_config;
-    register_builtins(local_symbols, local_interner);
-
     // Create type definition
     auto def = std::make_unique<TypeDefinition>(cls->name, TypeKind::CLASS, cls->location);
-    def->type_params = cls->type_params; // Though AST may not have them yet
-    def->fields = cls->fields;
-    def->methods = cls->methods; // Would need to extract types from methods
-    def->implemented_interfaces = cls->interfaces;
+    for (const auto& field : cls->fields) {
+        def->fields.emplace_back(field.name, annotation_to_type(field.type, field.location));
+    }
+    for (const auto& method : cls->methods) {
+        std::vector<TypePtr> param_types;
+        for (const auto& param : method->params) {
+            param_types.push_back(annotation_to_type(param.type, param.location));
+        }
+        TypePtr ret_type = method->has_return_type
+            ? annotation_to_type(method->return_type, method->location)
+            : Type::make_void();
+        def->methods.emplace_back(method->name, Type::make_function(param_types, ret_type, method->is_async));
+    }
+    def->implemented_interfaces.clear();
+    for (const auto& iface_name : cls->interfaces) {
+        if (TypeDefinition* iface_def = interner_.find_type_def(iface_name)) {
+            def->implemented_interfaces.push_back(Type::make_nominal(iface_def));
+        }
+    }
 
-    // Store in symbol table
-    TypePtr nominal_type = Type::make_nominal(def.get());
-    symbols_.declare_type(cls->name, nominal_type.release(), cls->location, false);
+    // Register with interner (owns the definition) and symbol table (borrows it)
+    interner_.register_type_def(std::move(def));
+    TypeDefinition* def_ptr = interner_.find_type_def(cls->name);
+    symbols_.declare_type(cls->name, def_ptr, cls->location, false);
 }
 
 void TypeChecker::collect_interface_signature(InterfaceDeclStmt* iface) {
-    TypeInterner local_interner;
-    SymbolTable local_symbols;
-    TypeCheckConfig local_config;
-    register_builtins(local_symbols, local_interner);
-
     // Create type definition
     auto def = std::make_unique<TypeDefinition>(iface->name, TypeKind::INTERFACE, iface->location);
-    def->methods = {}; // Interface methods declared later
+    for (const auto& method : iface->methods) {
+        std::vector<TypePtr> param_types;
+        for (const auto& param : method->params) {
+            param_types.push_back(annotation_to_type(param.type, param.location));
+        }
+        TypePtr ret_type = method->has_return_type
+            ? annotation_to_type(method->return_type, method->location)
+            : Type::make_void();
+        def->methods.emplace_back(method->name, Type::make_function(param_types, ret_type, method->is_async));
+    }
 
-    // Store in symbol table
-    TypePtr nominal_type = Type::make_nominal(def.get());
-    symbols_.declare_type(iface->name, nominal_type.release(), iface->location, false);
+    // Register with interner (owns the definition) and symbol table (borrows it)
+    interner_.register_type_def(std::move(def));
+    TypeDefinition* def_ptr = interner_.find_type_def(iface->name);
+    symbols_.declare_type(iface->name, def_ptr, iface->location, false);
 }
 
 // ── Type Inference Helpers ────────────────────────────────────────────────────
@@ -249,16 +245,53 @@ TypePtr TypeChecker::synth_expr(Expr* expr) {
 // ── Binary Operations ─────────────────────────────────────────────────────────
 
 TypePtr TypeChecker::check_binary_op(const Token& op, TypePtr left, TypePtr right, const SourceLocation& loc) {
-    // Check if both are numeric
-    if (is_numeric_type(left) && is_numeric_type(right)) {
-        // int + int = int, int + float = float, etc.
-        if (left->kind == TypeKind::INT && right->kind == TypeKind::INT) return left;
-        if (left->kind == TypeKind::FLOAT || right->kind == TypeKind::FLOAT) return Type::make_float();
-        return left; // fallback
+    switch (op.type) {
+        case TokenType::PLUS:
+        case TokenType::MINUS:
+        case TokenType::STAR:
+        case TokenType::SLASH:
+        case TokenType::PERCENT: {
+            // Arithmetic operators require numeric operands
+            if (is_numeric_type(left) && is_numeric_type(right)) {
+                if (left->kind == TypeKind::FLOAT || right->kind == TypeKind::FLOAT) {
+                    return Type::make_float();
+                }
+                return Type::make_int();
+            }
+            // String concatenation
+            if (op.type == TokenType::PLUS &&
+                left->kind == TypeKind::STRING && right->kind == TypeKind::STRING) {
+                return Type::make_string();
+            }
+            error(TypeError::Kind::TYPE_MISMATCH,
+                  "Arithmetic operator requires numeric operands, found '" +
+                  left->to_string() + "' and '" + right->to_string() + "'.",
+                  loc, nullptr, nullptr);
+            return interner_.get_error();
+        }
+        case TokenType::EQUAL_EQUAL:
+        case TokenType::BANG_EQUAL:
+        case TokenType::LESS:
+        case TokenType::LESS_EQUAL:
+        case TokenType::GREATER:
+        case TokenType::GREATER_EQUAL:
+            return check_comparison_op(op, left, right, loc);
+        case TokenType::AND_AND:
+        case TokenType::OR_OR:
+            if (left->kind == TypeKind::BOOL && right->kind == TypeKind::BOOL) {
+                return Type::make_bool();
+            }
+            error(TypeError::Kind::TYPE_MISMATCH,
+                  "Logical operator requires boolean operands, found '" +
+                  left->to_string() + "' and '" + right->to_string() + "'.",
+                  loc, nullptr, nullptr);
+            return interner_.get_error();
+        default:
+            error(TypeError::Kind::INVALID_OPERATION,
+                  "Invalid binary operator.",
+                  loc);
+            return interner_.get_error();
     }
-
-    // Check comparison operators
-    return check_comparison_op(op, left, right, loc);
 }
 
 TypePtr TypeChecker::check_comparison_op(const Token& op, TypePtr left, TypePtr right, const SourceLocation& loc) {
@@ -275,7 +308,8 @@ TypePtr TypeChecker::check_comparison_op(const Token& op, TypePtr left, TypePtr 
     }
 
     error(TypeError::Kind::TYPE_MISMATCH,
-          "Comparison operator incompatible types.",
+          "Comparison operator incompatible types: '" +
+          left->to_string() + "' and '" + right->to_string() + "'.",
           loc);
     return Type::make_bool();
 }
@@ -301,16 +335,17 @@ TypePtr TypeChecker::check_call(CallExpr* call, std::optional<TypePtr> expected)
 TypePtr TypeChecker::resolve_call_target(Expr* callee, const std::vector<std::unique_ptr<Expr>>& args, const SourceLocation& loc) {
     // Handle identifier callee
     if (auto* id = dynamic_cast<IdentifierExpr*>(callee)) {
-        Symbol* sym = symbols_.lookup_variable(id->name);
+        Symbol* sym = symbols_.lookup_function(id->name);
         if (!sym) {
-            error(TypeError::Kind::UNKNOWN_VARIABLE,
-                  "Undefined function '" + id->name + "'.",
-                  loc);
-            return interner_.get_error();
+            sym = symbols_.lookup_variable(id->name);
+        }
+        if (!sym) {
+            // Fall back to built-in functions (print, println, panic, assert, ...)
+            return check_builtin_call(id->name, args, loc, ctx_.expected_type);
         }
 
         TypePtr fn_type = sym->type;
-        if (fn_type->kind != TypeKind::FUNCTION) {
+        if (!fn_type || fn_type->kind != TypeKind::FUNCTION) {
             error(TypeError::Kind::NOT_CALLABLE,
                   " '" + id->name + "' is not callable.",
                   loc);
@@ -330,10 +365,10 @@ TypePtr TypeChecker::resolve_call_target(Expr* callee, const std::vector<std::un
         for (size_t i = 0; i < args.size(); ++i) {
             TypePtr arg_type = synth_expr(args[i].get());
             if (i < fn_type->param_types.size()) {
-                if (!unify_with_expected(arg_type, fn_type->param_types[i], args[i]->location)) {
+                if (!unify_with_expected(arg_type, fn_type->param_types[i], loc)) {
                     error(TypeError::Kind::ARG_TYPE_MISMATCH,
                           "Argument " + std::to_string(i + 1) + " type mismatch.",
-                          args[i]->location);
+                          loc);
                 }
             }
         }
@@ -357,8 +392,11 @@ TypePtr TypeChecker::check_member_access(MemberAccessExpr* expr, std::optional<T
         for (const auto& field : obj_type->definition->fields) {
             if (field.first == expr->member_name) {
                 TypePtr field_type = field.second;
-                if (expected.has_value()) {
-                    return unify_with_expected(field_type, expected.value(), expr->member_location);
+                if (expected.has_value() &&
+                    !unify_with_expected(field_type, expected.value(), expr->member_location)) {
+                    error(TypeError::Kind::TYPE_MISMATCH,
+                          "Field type mismatch for '" + expr->member_name + "'.",
+                          expr->member_location);
                 }
                 return field_type;
             }
@@ -366,8 +404,11 @@ TypePtr TypeChecker::check_member_access(MemberAccessExpr* expr, std::optional<T
         for (const auto& method : obj_type->definition->methods) {
             if (method.first == expr->member_name) {
                 TypePtr method_type = method.second;
-                if (expected.has_value()) {
-                    return unify_with_expected(method_type, expected.value(), expr->member_location);
+                if (expected.has_value() &&
+                    !unify_with_expected(method_type, expected.value(), expr->member_location)) {
+                    error(TypeError::Kind::TYPE_MISMATCH,
+                          "Method type mismatch for '" + expr->member_name + "'.",
+                          expr->member_location);
                 }
                 return method_type;
             }
@@ -387,14 +428,20 @@ TypePtr TypeChecker::check_index(IndexExpr* expr, std::optional<TypePtr> expecte
 
     if (container_type->kind == TypeKind::ARRAY && container_type->element_type) {
         // Array[index] -> element type
-        if (expected.has_value()) {
-            return unify_with_expected(container_type->element_type, expected.value(), expr->location);
+        if (expected.has_value() &&
+            !unify_with_expected(container_type->element_type, expected.value(), expr->location)) {
+            error(TypeError::Kind::TYPE_MISMATCH,
+                  "Index expression type mismatch.",
+                  expr->location);
         }
         return container_type->element_type;
     } else if (container_type->kind == TypeKind::SLICE && container_type->element_type) {
         // []T[index] -> T
-        if (expected.has_value()) {
-            return unify_with_expected(container_type->element_type, expected.value(), expr->location);
+        if (expected.has_value() &&
+            !unify_with_expected(container_type->element_type, expected.value(), expr->location)) {
+            error(TypeError::Kind::TYPE_MISMATCH,
+                  "Index expression type mismatch.",
+                  expr->location);
         }
         return container_type->element_type;
     }
@@ -421,8 +468,9 @@ void TypeChecker::check_var_decl(VarDeclStmt* stmt) {
                       stmt->location,
                       ann_type, init_type);
             }
+            symbols_.declare_variable(stmt->name, ann_type, stmt->is_mutable, stmt->location);
         } else {
-        // Inferred type - store in symbol table
+            // Inferred type - store in symbol table
             symbols_.declare_variable(stmt->name, init_type, stmt->is_mutable, stmt->location);
         }
     } else if (stmt->has_type_annotation) {
@@ -442,36 +490,44 @@ void TypeChecker::check_function_decl(FunctionDeclStmt* stmt) {
         symbols_.declare_variable(param.name, param_type, /*mutable=*/false, param.location);
     }
 
+    // Set the expected return type for this function
+    current_return_type_ = stmt->has_return_type
+        ? annotation_to_type(stmt->return_type, stmt->location)
+        : TypePtr(Type::make_void());
+    current_function_has_return_ = false;
+
     // Check body
     if (stmt->body) {
         check_block(stmt->body.get());
     }
 
     // Check return type consistency
-    if (stmt->has_return_type && !stmt->current_function_has_return_) {
-        // Function should have return statement
-        // Warn but don't error for v0.1
+    if (stmt->has_return_type && !current_function_has_return_) {
+        if (current_return_type_.has_value() && current_return_type_.value()->kind != TypeKind::VOID) {
+            note("Function '" + stmt->name + "' declared to return '" +
+                 current_return_type_.value()->to_string() + "' but has no return statement.",
+                 stmt->location);
+        }
     }
 
+    current_return_type_.reset();
     exit_function_scope();
 }
 
 void TypeChecker::check_class_decl(ClassDeclStmt* stmt) {
     // Enter type scope
-    enter_type_scope();
+    symbols_.enter_type_scope();
 
     // Check fields
     for (const auto& field : stmt->fields) {
-        TypePtr field_type = annotation_to_type(field.type, field.location);
-        // Store field type in class definition
+        annotation_to_type(field.type, field.location);
     }
 
     // Check methods
     for (const auto& method : stmt->methods) {
-        // Check method signature
-        TypePtr ret_type = stmt->return_type.kind == TypeKind::VOID
-            ? Type::make_void()
-            : Type::make_int(); // Simplified
+        TypePtr ret_type = method->has_return_type
+            ? annotation_to_type(method->return_type, method->location)
+            : Type::make_void();
 
         // Parameters
         std::vector<TypePtr> param_types;
@@ -483,12 +539,12 @@ void TypeChecker::check_class_decl(ClassDeclStmt* stmt) {
         symbols_.declare_function(method->name, fn_type, method->location, method->is_async);
     }
 
-    exit_type_scope();
+    symbols_.exit_scope();
 }
 
 void TypeChecker::check_interface_decl(InterfaceDeclStmt* stmt) {
     // Enter type scope
-    enter_type_scope();
+    symbols_.enter_type_scope();
 
     // Check methods (pure virtual by default)
     for (const auto& method : stmt->methods) {
@@ -502,7 +558,7 @@ void TypeChecker::check_interface_decl(InterfaceDeclStmt* stmt) {
         symbols_.declare_function(method->name, fn_type, method->location, method->is_async);
     }
 
-    exit_type_scope();
+    symbols_.exit_scope();
 }
 
 void TypeChecker::check_if_stmt(IfStmt* stmt) {
@@ -511,7 +567,7 @@ void TypeChecker::check_if_stmt(IfStmt* stmt) {
     if (cond_type->kind != TypeKind::BOOL) {
         error(TypeError::Kind::TYPE_MISMATCH,
               "Condition type must be boolean, found '" + cond_type->to_string() + "'.",
-              stmt->condition->location);
+              stmt->location);
     }
 
     // Check then branch
@@ -525,7 +581,7 @@ void TypeChecker::check_if_stmt(IfStmt* stmt) {
         if (elif_cond_type->kind != TypeKind::BOOL) {
             error(TypeError::Kind::TYPE_MISMATCH,
                   "Elif condition type must be boolean.",
-                  branch.condition->location);
+                  stmt->location);
         }
         if (branch.block) {
             check_block(branch.block.get(), /*expected_return=*/std::nullopt);
@@ -544,7 +600,7 @@ void TypeChecker::check_while_stmt(WhileStmt* stmt) {
     if (cond_type->kind != TypeKind::BOOL) {
         error(TypeError::Kind::TYPE_MISMATCH,
               "While condition type must be boolean, found '" + cond_type->to_string() + "'.",
-              stmt->condition->location);
+              stmt->location);
     }
 
     // Enter loop scope
@@ -567,11 +623,11 @@ void TypeChecker::check_match_stmt(MatchStmt* stmt) {
     // Check each arm
     for (const auto& arm : stmt->arms) {
         // Check pattern type against subject
-        TypePtr pattern_type = check_pattern(arm.pattern.get(), subject_type, arm.pattern->location);
+        TypePtr pattern_type = check_pattern(arm.pattern.get(), subject_type, stmt->location);
 
-        // Check body
+        // Check body (match arms are single statements, not blocks)
         if (arm.body) {
-            check_block(arm.body.get(), /*expected_return=*/std::nullopt);
+            arm.body->accept(this);
         }
     }
 
@@ -583,12 +639,13 @@ void TypeChecker::check_match_stmt(MatchStmt* stmt) {
 
 void TypeChecker::check_return_stmt(ReturnStmt* stmt) {
     // In function context, check return value type
+    current_function_has_return_ = true;
     if (stmt->value) {
         TypePtr ret_type = synth_expr(stmt->value.get());
         if (current_return_type_.has_value()) {
             if (!unify_with_expected(ret_type, current_return_type_.value(), stmt->location)) {
                 error(TypeError::Kind::RETURN_TYPE_MISMATCH,
-                      "Return type mismatch: expected '" + current_return_type_->to_string() +
+                      "Return type mismatch: expected '" + current_return_type_.value()->to_string() +
                       "', found '" + ret_type->to_string() + "'.",
                       stmt->location);
             }
@@ -597,7 +654,7 @@ void TypeChecker::check_return_stmt(ReturnStmt* stmt) {
         // Return void
         if (current_return_type_.has_value() && current_return_type_.value()->kind != TypeKind::VOID) {
             error(TypeError::Kind::RETURN_TYPE_MISMATCH,
-                  "Function returning '" + current_return_type_->to_string() + "' cannot return void.",
+                  "Function returning '" + current_return_type_.value()->to_string() + "' cannot return void.",
                   stmt->location);
         }
     }
@@ -614,12 +671,12 @@ void TypeChecker::check_try_catch_stmt(TryCatchStmt* stmt) {
         // Check catch variable declaration
         if (!catch_block.exception_type.empty()) {
             TypePtr exc_type = annotation_to_type(
-                TypeAnnotation{catch_block.exception_type, false, false, false, false}, catch_block.catch_loc);
-            symbols_.declare_variable(catch_block.exception_var, exc_type, false, catch_block.catch_loc);
+                TypeAnnotation{catch_block.exception_type, false, false, false, false}, catch_block.location);
+            symbols_.declare_variable(catch_block.exception_var, exc_type, false, catch_block.location);
         } else if (catch_block.has_exception_var) {
             // Generic catch without type - use infer type
             TypePtr exc_type = interner_.get_infer();
-            symbols_.declare_variable(catch_block.exception_var, exc_type, false, catch_block.catch_loc);
+            symbols_.declare_variable(catch_block.exception_var, exc_type, false, catch_block.location);
         }
 
         // Check catch body
@@ -639,6 +696,251 @@ void TypeChecker::check_go_stmt(GoStmt* stmt) {
     if (stmt->call) {
         synth_expr(stmt->call.get()); // Just check it's valid, don't enforce arg counts for go
     }
+}
+
+// ── ASTVisitor Implementation ─────────────────────────────────────────────────
+
+void TypeChecker::visit(IdentifierExpr* expr) {
+    Symbol* sym = symbols_.lookup_variable(expr->name);
+    if (!sym) {
+        error(TypeError::Kind::UNKNOWN_VARIABLE,
+              "Undefined variable '" + expr->name + "'.",
+              expr->location);
+        expr_types_[expr] = interner_.get_error();
+        return;
+    }
+    symbols_.mark_used(expr->name);
+    expr_types_[expr] = sym->type;
+}
+
+void TypeChecker::visit(LiteralExpr* expr) {
+    switch (expr->token.type) {
+        case TokenType::INTEGER_LITERAL:
+            expr_types_[expr] = Type::make_int();
+            break;
+        case TokenType::FLOAT_LITERAL:
+            expr_types_[expr] = Type::make_float();
+            break;
+        case TokenType::STRING_LITERAL:
+        case TokenType::STRING_START:
+        case TokenType::STRING_MIDDLE:
+        case TokenType::STRING_END:
+            expr_types_[expr] = Type::make_string();
+            break;
+        case TokenType::KW_TRUE:
+        case TokenType::KW_FALSE:
+            expr_types_[expr] = Type::make_bool();
+            break;
+        case TokenType::KW_NULL:
+            expr_types_[expr] = Type::make_infer()->with_nullable(true);
+            break;
+        default:
+            error(TypeError::Kind::TYPE_MISMATCH,
+                  "Unsupported literal in type checker.",
+                  expr->token.location);
+            expr_types_[expr] = interner_.get_error();
+            break;
+    }
+}
+
+void TypeChecker::visit(UnaryExpr* expr) {
+    TypePtr right = synth_expr(expr->right.get());
+    switch (expr->op.type) {
+        case TokenType::BANG:
+            if (right->kind != TypeKind::BOOL && right->kind != TypeKind::INFER) {
+                error(TypeError::Kind::TYPE_MISMATCH,
+                      "Logical not ('!') requires a boolean operand, found '" +
+                      right->to_string() + "'.",
+                      expr->op.location);
+            }
+            expr_types_[expr] = Type::make_bool();
+            return;
+        case TokenType::MINUS:
+            if (!is_numeric_type(right) && right->kind != TypeKind::INFER) {
+                error(TypeError::Kind::TYPE_MISMATCH,
+                      "Unary minus requires a numeric operand, found '" +
+                      right->to_string() + "'.",
+                      expr->op.location);
+            }
+            expr_types_[expr] = right;
+            return;
+        case TokenType::AMPERSAND:
+            // Immutable borrow: &T
+            check_borrow(expr->right.get(), right, /*mutable_borrow=*/false, expr->op.location);
+            expr_types_[expr] = right->with_ownership(Ownership::BORROW);
+            return;
+        default:
+            error(TypeError::Kind::INVALID_OPERATION,
+                  "Invalid unary operator.",
+                  expr->op.location);
+            expr_types_[expr] = interner_.get_error();
+            return;
+    }
+}
+
+void TypeChecker::visit(BinaryExpr* expr) {
+    TypePtr left = synth_expr(expr->left.get());
+    TypePtr right = synth_expr(expr->right.get());
+    expr_types_[expr] = check_binary_op(expr->op, left, right, expr->op.location);
+}
+
+void TypeChecker::visit(CallExpr* expr) {
+    expr_types_[expr] = check_call(expr, ctx_.expected_type);
+}
+
+void TypeChecker::visit(MemberAccessExpr* expr) {
+    expr_types_[expr] = check_member_access(expr, ctx_.expected_type);
+}
+
+void TypeChecker::visit(AwaitExpr* expr) {
+    // await unwraps the awaited value; for v0.1 we treat it as the inner type
+    if (expr->value) {
+        expr_types_[expr] = synth_expr(expr->value.get());
+    } else {
+        expr_types_[expr] = interner_.get_error();
+    }
+}
+
+void TypeChecker::visit(IndexExpr* expr) {
+    if (expr->index) {
+        TypePtr idx_type = synth_expr(expr->index.get());
+        if (idx_type->kind != TypeKind::INT && idx_type->kind != TypeKind::INFER) {
+            error(TypeError::Kind::TYPE_MISMATCH,
+                  "Array index must be an integer, found '" + idx_type->to_string() + "'.",
+                  expr->location);
+        }
+    }
+    expr_types_[expr] = check_index(expr, ctx_.expected_type);
+}
+
+void TypeChecker::visit(CastExpr* expr) {
+    TypePtr inner = expr->expression ? synth_expr(expr->expression.get()) : interner_.get_error();
+
+    TypePtr target = annotation_to_type(
+        TypeAnnotation{expr->target_type, false, false, false, false}, expr->location);
+
+    if (!is_numeric_type(inner) && inner->kind != TypeKind::INFER &&
+        !(inner->kind == TypeKind::STRING && (target->kind == TypeKind::INT ||
+                                              target->kind == TypeKind::FLOAT)) &&
+        !(inner->kind == TypeKind::BOOL && (target->kind == TypeKind::INT ||
+                                             target->kind == TypeKind::FLOAT))) {
+        error(TypeError::Kind::TYPE_MISMATCH,
+              "Cannot cast '" + inner->to_string() + "' to '" + expr->target_type + "'.",
+              expr->location);
+    }
+
+    expr_types_[expr] = target;
+}
+
+void TypeChecker::visit(BlockStmt* stmt) {
+    check_block(stmt);
+}
+
+void TypeChecker::visit(VarDeclStmt* stmt) {
+    check_var_decl(stmt);
+}
+
+void TypeChecker::visit(ExpressionStmt* stmt) {
+    if (stmt->expression) {
+        synth_expr(stmt->expression.get());
+    }
+}
+
+void TypeChecker::visit(PrintStmt* stmt) {
+    if (stmt->value) synth_expr(stmt->value.get());
+}
+
+void TypeChecker::visit(PrintLnStmt* stmt) {
+    if (stmt->value) synth_expr(stmt->value.get());
+}
+
+void TypeChecker::visit(EmptyStmt* stmt) {
+    (void)stmt; // No-op
+}
+
+void TypeChecker::visit(FunctionDeclStmt* stmt) {
+    check_function_decl(stmt);
+}
+
+void TypeChecker::visit(ClassDeclStmt* stmt) {
+    check_class_decl(stmt);
+}
+
+void TypeChecker::visit(InterfaceDeclStmt* stmt) {
+    check_interface_decl(stmt);
+}
+
+void TypeChecker::visit(IfStmt* stmt) {
+    check_if_stmt(stmt);
+}
+
+void TypeChecker::visit(WhileStmt* stmt) {
+    check_while_stmt(stmt);
+}
+
+void TypeChecker::visit(MatchStmt* stmt) {
+    check_match_stmt(stmt);
+}
+
+void TypeChecker::visit(ReturnStmt* stmt) {
+    check_return_stmt(stmt);
+}
+
+void TypeChecker::visit(TryCatchStmt* stmt) {
+    check_try_catch_stmt(stmt);
+}
+
+void TypeChecker::visit(GoStmt* stmt) {
+    check_go_stmt(stmt);
+}
+
+void TypeChecker::visit(DeferStmt* stmt) {
+    if (stmt->body) check_block(stmt->body.get());
+}
+
+void TypeChecker::visit(UnsafeBlockStmt* stmt) {
+    if (stmt->body) check_block(stmt->body.get());
+}
+
+void TypeChecker::visit(PanicStmt* stmt) {
+    if (stmt->message) synth_expr(stmt->message.get());
+}
+
+void TypeChecker::visit(PythonFFIBlockStmt* stmt) {
+    for (const auto& imp : stmt->imports) {
+        if (imp) imp->accept(this);
+    }
+}
+
+void TypeChecker::visit(JSXExprExpr* expr) {
+    expr_types_[expr] = expr->expression
+        ? synth_expr(expr->expression.get())
+        : interner_.get_infer();
+}
+
+void TypeChecker::visit(JSXTagExpr* expr) {
+    if (expr->children) synth_expr(expr->children.get());
+    expr_types_[expr] = interner_.get_infer();
+}
+
+void TypeChecker::visit(CSSStylesStmt* stmt) {
+    (void)stmt; // Styling content is not type-checked
+}
+
+void TypeChecker::visit(HTMLTemplateStmt* stmt) {
+    (void)stmt; // Template content is not type-checked
+}
+
+void TypeChecker::visit(PythonImportStmt* stmt) {
+    (void)stmt; // FFI import — validated at codegen
+}
+
+void TypeChecker::visit(JSExportStmt* stmt) {
+    (void)stmt; // FFI export — validated at codegen
+}
+
+void TypeChecker::check_statement(Stmt* stmt) {
+    if (stmt) stmt->accept(this);
 }
 
 // ── Block Checking ────────────────────────────────────────────────────────────
@@ -687,7 +989,7 @@ bool TypeChecker::check_match_exhaustiveness(MatchStmt* stmt, TypePtr subject_ty
     // For now, just warn if no arms (but don't error)
     if (stmt->arms.empty()) {
         note("Match statement has no arms - always executes default branch.",
-             stmt->subject->location);
+             stmt->location);
         return false;
     }
 
@@ -739,13 +1041,6 @@ bool TypeChecker::is_move_operation(const Token& op) const {
     return op.type == TokenType::EQUAL;
 }
 
-// New: Check for use-after-move
-void TypeChecker::check_use_after_move(Expr* expr, const SourceLocation& loc) {
-    // In full implementation, check if variable has been moved from
-    // For now, placeholder - would check symbol table ownership state
-    (void)expr; (void)loc;
-}
-
 // ── Utility Methods ───────────────────────────────────────────────────────────
 
 TypePtr TypeChecker::get_common_type(TypePtr a, TypePtr b) {
@@ -763,37 +1058,44 @@ TypePtr TypeChecker::get_common_type(TypePtr a, TypePtr b) {
 }
 
 TypePtr TypeChecker::annotation_to_type(const TypeAnnotation& ann, const SourceLocation& loc) {
-    // Convert type annotation to TypePtr
-    // This is called from various check methods
-    TypePtr result = Type::make_infer();
-
-    // Handle ownership
-    if (ann.is_owned) result = result->with_ownership(Ownership::OWN);
-    if (ann.is_borrowed) {
-        result = result->with_ownership(
-            ann.is_mutable_borrow ? Ownership::BORROW_MUT : Ownership::BORROW
-        );
-    }
-
-    // Handle nullability
-    if (ann.is_nullable) result = result->with_nullable(true);
-
-    // Handle base type
-    if (!ann.name.empty()) {
-        if (ann.name == "int") result = Type::make_int();
-        else if (ann.name == "float") result = Type::make_float();
-        else if (ann.name == "string") result = Type::make_string();
-        else if (ann.name == "bool") result = Type::make_bool();
-        else if (ann.name == "void") result = Type::make_void();
-        else if (ann.name == "int?") {
-            result = Type::make_int()->with_nullable(true);
-        } else if (ann.name == "string?") {
-            result = Type::make_string()->with_nullable(true);
+    // Resolve the base type from the annotation name
+    TypePtr base;
+    if (ann.name.empty() || ann.name == "_" || ann.name == "auto") {
+        base = Type::make_infer();
+    } else if (ann.name == "int" || ann.name == "i64" || ann.name == "i32" ||
+               ann.name == "i16" || ann.name == "i8") {
+        base = Type::make_int();
+    } else if (ann.name == "float" || ann.name == "f64" || ann.name == "f32") {
+        base = Type::make_float();
+    } else if (ann.name == "string") {
+        base = Type::make_string();
+    } else if (ann.name == "bool") {
+        base = Type::make_bool();
+    } else if (ann.name == "void") {
+        base = Type::make_void();
+    } else {
+        // Look up user-defined nominal types (class/interface/struct/enum)
+        if (TypeDefinition* def = interner_.find_type_def(ann.name)) {
+            base = Type::make_nominal(def);
+        } else {
+            error(TypeError::Kind::UNKNOWN_TYPE,
+                  "Unknown type '" + ann.name + "'.",
+                  loc);
+            base = Type::make_infer();
         }
-        // etc.
     }
 
-    return result;
+    // Apply ownership modifiers
+    if (ann.is_owned) base = base->with_ownership(Ownership::OWN);
+    if (ann.is_borrowed) {
+        base = base->with_ownership(
+            ann.is_mutable_borrow ? Ownership::BORROW_MUT : Ownership::BORROW);
+    }
+
+    // Apply nullability
+    if (ann.is_nullable) base = base->with_nullable(true);
+
+    return base;
 }
 
 bool TypeChecker::is_numeric_type(TypePtr t) const {
@@ -908,15 +1210,5 @@ void TypeChecker::exit_function_scope() {
     symbols_.exit_scope();
     ctx_.level--; // Balance the increment from enter_function_scope
 }
-
-// Helper: token type to string (used in error messages)
-const char* token_type_to_string(TokenType type) {
-    // This would be defined in token.h - forward declaration
-    return "unknown";
-}
-
-// ── Type Interner Methods (delegated) ─────────────────────────────────────────
-
-// The TypeInterner methods are called directly on interner_ member
 
 } // namespace novium

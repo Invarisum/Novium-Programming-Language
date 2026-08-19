@@ -22,11 +22,12 @@
 #include <memory>
 #include <map>
 #include "parser/ast.h"
+#include "sema/types.h"
 
 namespace novium::migratir {
 
 // ============================================================================
-// Node Types in the Migration IR
+// Base Node Types in the Migration IR
 // ============================================================================
 
 // Base class for all IR nodes
@@ -37,17 +38,183 @@ public:
     virtual std::string to_string() const = 0;
 };
 
-// Module node - top-level container
-class IRModule : public IRNode {
+// Expression base type - all expressions derive from this
+class IRExpr : public IRNode {
+public:
+    virtual ~IRExpr() = default;
+    std::string kind() const override = 0;
+};
+
+// Statement base type - all statements derive from this
+class IRStmt : public IRNode {
+public:
+    virtual ~IRStmt() = default;
+    std::string kind() const override = 0;
+};
+
+// ============================================================================
+// Expression Types in IR
+// ============================================================================
+
+// Identifier expression
+class IRIdentifier : public IRExpr {
 public:
     std::string name;
-    std::vector<std::unique_ptr<IRNode>> items;
 
-    IRModule(std::string name) : name(std::move(name)) {}
-
-    std::string kind() const override { return "module"; }
+    explicit IRIdentifier(std::string name) : name(std::move(name)) {}
+    std::string kind() const override { return "identifier"; }
     std::string to_string() const override;
 };
+
+// Integer literal
+class IRIntLiteral : public IRExpr {
+public:
+    int64_t value;
+
+    explicit IRIntLiteral(int64_t value) : value(value) {}
+    std::string kind() const override { return "int_literal"; }
+    std::string to_string() const override;
+};
+
+// Float literal
+class IRFloatLiteral : public IRExpr {
+public:
+    double value;
+
+    explicit IRFloatLiteral(double value) : value(value) {}
+    std::string kind() const override { return "float_literal"; }
+    std::string to_string() const override;
+};
+
+// String literal
+class IRStringLiteral : public IRExpr {
+public:
+    std::string value;
+
+    explicit IRStringLiteral(std::string value) : value(std::move(value)) {}
+    std::string kind() const override { return "string_literal"; }
+    std::string to_string() const override;
+};
+
+// Binary operation
+class IRBinaryOp : public IRExpr {
+public:
+    std::string op; // +, -, *, /, ==, !=, <, >, &&
+    std::unique_ptr<IRExpr> left;
+    std::unique_ptr<IRExpr> right;
+
+    IRBinaryOp(std::string op, std::unique_ptr<IRExpr> left,
+               std::unique_ptr<IRExpr> right)
+        : op(std::move(op)), left(std::move(left)), right(std::move(right)) {}
+    std::string kind() const override { return "binary_op"; }
+    std::string to_string() const override;
+};
+
+// Function call
+class IRCallExpr : public IRExpr {
+public:
+    std::string callee;
+    std::vector<std::unique_ptr<IRExpr>> args;
+
+    IRCallExpr(std::string callee, std::vector<std::unique_ptr<IRExpr>> args)
+        : callee(std::move(callee)), args(std::move(args)) {}
+    std::string kind() const override { return "call"; }
+    std::string to_string() const override;
+};
+
+// ============================================================================
+// Statement Types in IR
+// ============================================================================
+
+// Block statement (sequence)
+class IRBlock : public IRStmt {
+public:
+    std::vector<std::unique_ptr<IRStmt>> stmts;
+
+    IRBlock() = default;
+    std::string kind() const override { return "block"; }
+    std::string to_string() const override;
+};
+
+// Expression statement
+class IREXPRStmt : public IRStmt {
+public:
+    std::unique_ptr<IRExpr> expr;
+
+    explicit IREXPRStmt(std::unique_ptr<IRExpr> expr) : expr(std::move(expr)) {}
+    std::string kind() const override { return "expr_stmt"; }
+    std::string to_string() const override;
+};
+
+// Return statement
+class IRReturn : public IRStmt {
+public:
+    std::unique_ptr<IRExpr> value;
+
+    explicit IRReturn(std::unique_ptr<IRExpr> value = nullptr) : value(std::move(value)) {}
+    std::string kind() const override { return "return"; }
+    std::string to_string() const override;
+};
+
+// If statement
+class IRIf : public IRStmt {
+public:
+    std::unique_ptr<IRExpr> condition;
+    std::unique_ptr<IRStmt> then_branch;
+    std::unique_ptr<IRStmt> else_branch;
+
+    IRIf(std::unique_ptr<IRExpr> cond, std::unique_ptr<IRStmt> then_b,
+         std::unique_ptr<IRStmt> else_b = nullptr)
+        : condition(std::move(cond)), then_branch(std::move(then_b)),
+          else_branch(std::move(else_b)) {}
+    std::string kind() const override { return "if"; }
+    std::string to_string() const override;
+};
+
+// While statement
+class IRWhile : public IRStmt {
+public:
+    std::unique_ptr<IRExpr> condition;
+    std::unique_ptr<IRStmt> body;
+
+    IRWhile(std::unique_ptr<IRExpr> cond, std::unique_ptr<IRStmt> body)
+        : condition(std::move(cond)), body(std::move(body)) {}
+    std::string kind() const override { return "while"; }
+    std::string to_string() const override;
+};
+
+// For statement (C-style)
+class IRFor : public IRStmt {
+public:
+    std::unique_ptr<IRExpr> init;
+    std::unique_ptr<IRExpr> cond;
+    std::unique_ptr<IRExpr> inc;
+    std::unique_ptr<IRStmt> body;
+
+    IRFor(std::unique_ptr<IRExpr> init, std::unique_ptr<IRExpr> cond,
+          std::unique_ptr<IRExpr> inc, std::unique_ptr<IRStmt> body)
+        : init(std::move(init)), cond(std::move(cond)),
+          inc(std::move(inc)), body(std::move(body)) {}
+    std::string kind() const override { return "for"; }
+    std::string to_string() const override;
+};
+
+// Variable declaration
+class IRVarDecl : public IRStmt {
+public:
+    std::string name;
+    std::string type;
+    bool is_mutable;
+
+    IRVarDecl(std::string name, std::string type, bool is_mutable = false)
+        : name(std::move(name)), type(std::move(type)), is_mutable(is_mutable) {}
+    std::string kind() const override { return "var_decl"; }
+    std::string to_string() const override;
+};
+
+// ============================================================================
+// Container Nodes
+// ============================================================================
 
 // Function node
 class IRFunc : public IRNode {
@@ -78,169 +245,15 @@ public:
     std::string to_string() const override;
 };
 
-// Statement types in IR
-class IRStmt : public IRNode {
-public:
-    virtual ~IRStmt() = default;
-    std::string kind() const override = 0;
-};
-
-// Block statement (sequence)
-class IRBlock : public IRStmt {
-public:
-    std::vector<std::unique_ptr<IRStmt>> stmts;
-
-    IRBlock() = default;
-    std::string kind() const override { return "block"; }
-    std::string to_string() const override;
-};
-
-// Expression statement
-class IREXPRStmt : public IRStmt {
-public:
-    std::unique_ptr<IRExpr> expr;
-
-    IREXPRStmt(std::unique_ptr<IRExpr> expr) : expr(std::move(expr)) {}
-    std::string kind() const override { return "expr_stmt"; }
-    std::string to_string() const override;
-};
-
-// Return statement
-class IRReturn : public IRStmt {
-public:
-    std::unique_ptr<IRExpr> value;
-
-    IRReturn(std::unique_ptr<IRExpr> value = nullptr) : value(std::move(value)) {}
-    std::string kind() const override { return "return"; }
-    std::string to_string() const override;
-};
-
-// If statement
-class IRIf : public IRStmt {
-public:
-    std::unique_ptr<IRExpr> condition;
-    std::unique_ptr<IRStmt> then_branch;
-    std::unique_ptr<IRStmt> else_branch;
-
-    IRIf(std::unique_ptr<IRExpr> cond, std::unique_ptr<IRStmt> then_b,
-         std::unique_ptr<IRStmt> else_b = nullptr)
-        : condition(std::move(cond)), then_branch(std::move(then_b)),
-          else_branch(std::move(else_b)) {}
-    std::string kind() const override { return "if"; }
-    std::string to_string() const override;
-};
-
-// While statement
-class IRWhile : public IRStmt {
-public:
-    std::unique_ptr<IRExpr> condition;
-    std::unique_ptr<IRStmt> body;
-
-    IRWhile(std::unique_ptr<IRExpr> cond, std::unique_ptr<IRStmt> body)
-        : condition(std::move(condition)), body(std::move(body)) {}
-    std::string kind() const override { return "while"; }
-    std::string to_string() const override;
-};
-
-// For statement (C-style)
-class IRFor : public IRStmt {
-public:
-    std::unique_ptr<IRExpr> init;
-    std::unique_ptr<IRExpr> cond;
-    std::unique_ptr<IRExpr> inc;
-    std::unique_ptr<IRStmt> body;
-
-    IRFor(std::unique_ptr<IRExpr> init, std::unique_ptr<IRExpr> cond,
-          std::unique_ptr<IRExpr> inc, std::unique_ptr<IRStmt> body)
-        : init(std::move(init)), cond(std::move(cond)),
-          inc(std::move(inc)), body(std::move(body)) {}
-    std::string kind() const override { return "for"; }
-    std::string to_string() const override;
-};
-
-// Expression types in IR
-class IRExpr : public IRNode {
-public:
-    virtual ~IRExpr() = default;
-    std::string kind() const override = 0;
-};
-
-// Identifier expression
-class IRIdentifier : public IRExpr {
+// Module node - top-level container
+class IRModule : public IRNode {
 public:
     std::string name;
+    std::vector<std::unique_ptr<IRNode>> items;
 
-    IRIdentifier(std::string name) : name(std::move(name)) {}
-    std::string kind() const override { return "identifier"; }
-    std::string to_string() const override;
-};
+    explicit IRModule(std::string name) : name(std::move(name)) {}
 
-// Integer literal
-class IRIntLiteral : public IRExpr {
-public:
-    int64_t value;
-
-    IRIntLiteral(int64_t value) : value(value) {}
-    std::string kind() const override { return "int_literal"; }
-    std::string to_string() const override;
-};
-
-// Float literal
-class IRFloatLiteral : public IRExpr {
-public:
-    double value;
-
-    IRFloatLiteral(double value) : value(value) {}
-    std::string kind() const override { return "float_literal"; }
-    std::string to_string() const override;
-};
-
-// String literal
-class IRStringLiteral : public IRExpr {
-public:
-    std::string value;
-
-    IRStringLiteral(std::string value) : value(std::move(value)) {}
-    std::string kind() const override { return "string_literal"; }
-    std::string to_string() const override;
-};
-
-// Binary operation
-class IRBinaryOp : public IRExpr {
-public:
-    std::string op; // +, -, *, /, ==, !=, <, >, &&
-    std::unique_ptr<IRExpr> left;
-    std::unique_ptr<IRExpr> right;
-
-    IRBinaryOp(std::string op, std::unique_ptr<IRExpr> left,
-               std::unique_ptr<IRExpr> right)
-        : op(std::move(op)), left(std::move(left)), right(std::move(right)) {}
-    std::string kind() const override { return "binary_op"; }
-    std::string to_string() const override;
-};
-
-// Function call
-IRCallExpr : public IRExpr {
-public:
-    std::string callee;
-    std::vector<std::unique_ptr<IRExpr>> args;
-
-    IRCallExpr(std::string callee, std::vector<std::unique_ptr<IRExpr>> args)
-        : callee(std::move(callee)), args(std::move(args)) {}
-    std::string kind() const override { return "call"; }
-    std::string to_string() const override;
-};
-
-// Variable declaration
-class IRVarDecl : public IRStmt {
-public:
-    std::string name;
-    std::string type;
-    bool is_mutable;
-
-    IRVarDecl(std::string name, std::string type, bool is_mutable = false)
-        : name(std::move(name)), type(std::move(type)), is_mutable(is_mutable) {}
-    std::string kind() const override { return "var_decl"; }
+    std::string kind() const override { return "module"; }
     std::string to_string() const override;
 };
 
@@ -289,6 +302,7 @@ std::unique_ptr<IRModule> python_source_to_ir(const std::string& source);
 // Parse Rust source code into Migration IR (subset: functions, expressions)
 std::unique_ptr<IRModule> rust_source_to_ir(const std::string& source);
 
-// ============================================================================
+// CLI entry point: `novium migrate <direction> [file]`
+int main_migrate(int argc, char* argv[]);
 
 } // namespace novium::migratir

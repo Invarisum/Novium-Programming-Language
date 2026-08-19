@@ -1,0 +1,126 @@
+// =============================================================================
+# react_components_demo.nvw — .nvw React Components Demo
+# .nvw: Frontend Web Compiler
+# Focus: React JSX, component system, CSS-in-JS
+# =============================================================================
+
+# ── React Component Definitions Using JSX ──────────────────────────────────
+
+# Basic component - function component syntax
+let Greeting = <fn(name: string) -> div>
+    <h1>Hello, {name}!</h1>
+    <p>Welcome to Novium .nvw React integration.</p>
+</fn>
+
+# Component with state-like behavior (compiled to React useState)
+let Counter = <fn() -> div>
+    let count = 0
+    
+    let increment = fn()
+        count = count + 1
+    end
+    
+    <div>
+        <h2>Count: {count}</h2>
+        <button on_click={increment}>Increment</button>
+    </div>
+</fn>
+
+# Create component element
+let my_greeting = react_create("Greeting", {"name": "Alice"})
+print("Created Greeting component: " + my_greeting)
+
+# Render component
+let rendered_greeting = react_render("Greeting", {"name": "Bob"})
+print("Rendered Greeting: " + rendered_greeting)
+
+# Nested components
+let AppShell = <div>
+    <Greeting name="World" />
+    <Counter />
+</div>
+
+let app_element = react_create("AppShell", {})
+let app_render = react_render("AppShell", {})
+print("AppShell rendered: " + app_render)
+
+# Component with props and defaults
+let UserProfile = <fn(username: string, avatar: string = "default") -> div>
+    <div>
+        <h2>{username}</h2>
+        <img src={avatar} alt="{username}'s profile" />
+    </div>
+</fn>
+
+let profile = react_create("UserProfile", {"username": "Charlie", "avatar": "/img/avatar.png"})
+print("User profile created: " + profile)
+
+# Python data integration with React
+python_import("datetime")
+let current_time = python_call("datetime.now")
+print("Current time from Python: " + current_time)
+
+let TimeDisplay = <fn() -> div>
+    <p>Server time: {current_time}</p>
+</fn>
+
+let time_element = react_create("TimeDisplay", {})
+let time_render = react_render("App", {"showTime": True})
+print("Time display rendered: " + time_render)
+
+# CSS-in-JS styles
+css: "body { font-family: Arial, sans-serif; margin: 20px; }"
+css: ".button { padding: 10px 20px; background: #0066cc; color: white; border: none; border-radius: 4px; }"
+css: ".container { max-width: 800px; margin: 0 auto; }"
+
+# Component with CSS classes
+let StyledButton = <fn(text: string) -> div>
+    <button class="button">{text}</button>
+</fn>
+
+let save_btn = react_create("StyledButton", {"text": "Save"})
+print("Styled button created: " + save_btn)
+
+# Route-based components
+let HomePage = <div>
+    <h1>Home</h1>
+    <p>Welcome to the Novium web app.</p>
+</fn>
+
+let AboutPage = <fn() -> div>
+    <h1>About</h1>
+    <p>Novium .nvw - full-stack language with .nvm compiler and .nvi interpreter.</p>
+</fn>
+
+let routes: list = [
+    Route("/", HomePage, "Home"),
+    Route("/about", AboutPage, "About"),
+]
+
+let route_elements = react_create("Router", {"routes": routes})
+print("Router component created: " + route_elements)
+
+# Full app with Python + React + CSS
+python_import("math")
+let pi = python_call("pi")
+
+let FullApp = <fn() -> div>
+    <h1>Novium Full-Stack Web App</h1>
+    <p>Powered by .nvw frontend with Python FFI and React.</p>
+    
+    <div class="container">
+        <Greeting name="User" />
+        <Counter />
+        <br />
+        <span>π ≈ {pi}</span>
+    </div>
+</fn>
+
+let app = react_create("FullApp", {})
+let full_render = react_render("App", {})
+print("Full app rendered: " + full_render)
+
+print("React components demo complete!")
+# .nvw: Frontend-only - JSX compiles to virtual DOM,
+# Python FFI compiles to browser API calls,
+# CSS-in-JS styles are static (no runtime processing)

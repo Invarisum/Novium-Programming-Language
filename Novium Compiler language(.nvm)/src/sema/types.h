@@ -44,6 +44,20 @@ enum class Ownership {
     BORROW_MUT // Mutable borrow (&mut T) - exclusive reference
 };
 
+// ── Hardware Target ───────────────────────────────────────────────────────────
+// Finite choice for code compilation/execution target hardware.
+// Ensures deterministic code generation and interop.
+enum class HardwareTarget {
+    CPU,                           // Native x86_64 / ARM code generation
+    GPU,                           // Parallel data-parallel execution
+    CUDA,                          // NVIDIA CUDA kernels
+    ROCm,                          // AMD ROCm kernels
+    ONEAPI,                        // Intel oneAPI / DPC++ kernels
+    NPU,                           // Neural network inference acceleration
+    ACCELERATOR,                   // Custom hardware co-processor (via FFI)
+    AUTO                           // Let runtime decide best target
+};
+
 // ── Type Kind ─────────────────────────────────────────────────────────────────
 enum class TypeKind {
     // Unresolved / Inference
@@ -53,7 +67,15 @@ enum class TypeKind {
     // Primitives
     VOID,
     BOOL,
+    INT8,            // i8
+    INT16,           // i16
+    INT32,           // i32
     INT,             // i64
+    UINT8,           // u8
+    UINT16,          // u16
+    UINT32,          // u32
+    UINT,            // u64
+    FLOAT16,         // f16 (half precision)
     FLOAT,           // f64
     STRING,          // UTF-8 owned string
     CHAR,            // Unicode scalar value
@@ -75,6 +97,13 @@ enum class TypeKind {
     
     // Pointer/Reference types (explicit, for C interop)
     RAW_PTR,         // *const T / *mut T (unsafe)
+    
+    // ML/DL Graph types
+    TENSOR,          // Tensor<float> - for neural network computations
+    MATRIX,          // Matrix<float> - 2D tensor operations
+    WEIGHT,          // Learnable weight parameter
+    BIAS,            // Learnable bias parameter
+    OPTIMIZER_STATE, // Optimizer state (momentum, etc.)
     
     // Error type (for recovery)
     ERROR
@@ -145,6 +174,7 @@ public:
     TypeKind kind;
     Ownership ownership = Ownership::NONE;
     bool nullable = false;
+    HardwareTarget hardware_target = HardwareTarget::AUTO;
     
     // Kind-specific data
     std::vector<TypePtr> type_args; // For generic instantiations
@@ -167,19 +197,110 @@ public:
     
     // For RAW_PTR
     bool is_mutable_ptr = false;
-
-    // Constructors
-    Type(TypeKind k) : kind(k) {}
     
-    static TypePtr make_void() { return std::make_shared<Type>(TypeKind::VOID); }
-    static TypePtr make_bool() { return std::make_shared<Type>(TypeKind::BOOL); }
-    static TypePtr make_int() { return std::make_shared<Type>(TypeKind::INT); }
-    static TypePtr make_float() { return std::make_shared<Type>(TypeKind::FLOAT); }
-    static TypePtr make_string() { return std::make_shared<Type>(TypeKind::STRING); }
-    static TypePtr make_char() { return std::make_shared<Type>(TypeKind::CHAR); }
-    static TypePtr make_never() { return std::make_shared<Type>(TypeKind::NEVER); }
-    static TypePtr make_error() { return std::make_shared<Type>(TypeKind::ERROR); }
-    static TypePtr make_infer() { return std::make_shared<Type>(TypeKind::INFER); }
+    // LIFETIME TRACKING: generation counter for automatic memory management
+    // Each type instance gets a unique generation ID; when generation decrements to 0,
+    // the memory can be safely reclaimed (ARCs, refcounting, or scoped cleanup)
+    int64_t generation_id = 0;
+    
+    // ML/DL Graph specific fields
+    // Shape/-dimensions of tensor/matrix types
+    std::vector<int64_t> shape; // e.g., [batch, height, width, channels]
+    TypePtr dtype; // Element type (e.g., FLOAT16, FLOAT32)
+    size_t element_count; // Total number of elements = product of shape
+    
+    // Operation kind for graph nodes
+    enum class OpKind { NONE, ADD, MUL, MATMUL, CONV, POOL, ACTIVATION, RELU, SIGMOID, TANH };
+    OpKind op = OpKind::NONE;
+    
+    // For graph node profiling
+    std::string op_name; // Human-readable operation name
+    int64_t flops; // Estimated floating-point operations
+    size_t memory_bytes; // Memory footprint in bytes
+    
+    // Graph node input/output indices
+    int input_idx = -1;
+    int output_idx = -1;
+    
+    // Constructors
+    Type(TypeKind k) : kind(k), generation_id(1), element_count(0) {
+        shape = {};
+        dtype = nullptr;
+        op = OpKind::NONE;
+        flops = 0;
+        memory_bytes = 0;
+    }
+    
+    static TypePtr make_void(HardwareTarget hw = HardwareTarget::AUTO) { 
+        auto t = std::make_shared<Type>(TypeKind::VOID); 
+        t->hardware_target = hw; 
+        return t; 
+    }
+    static TypePtr make_bool(HardwareTarget hw = HardwareTarget::AUTO) { 
+        auto t = std::make_shared<Type>(TypeKind::BOOL); 
+        t->hardware_target = hw; 
+        return t; 
+    }
+    static TypePtr make_int(HardwareTarget hw = HardwareTarget::AUTO, int size = 64) { 
+        auto k = size <= 32 ? TypeKind::INT32 : TypeKind::INT; 
+        auto t = std::make_shared<Type>(k); 
+        t->hardware_target = hw; 
+        return t; 
+    }
+    static TypePtr make_float(HardwareTarget hw = HardwareTarget::AUTO) { 
+        auto t = std::make_shared<Type>(TypeKind::FLOAT); 
+        t->hardware_target = hw; 
+        return t; 
+    }
+    static TypePtr make_string(HardwareTarget hw = HardwareTarget::AUTO) { 
+        auto t = std::make_shared<Type>(TypeKind::STRING); 
+        t->hardware_target = hw; 
+        return t; 
+    }
+    static TypePtr make_char(HardwareTarget hw = HardwareTarget::AUTO) { 
+        auto t = std::make_shared<Type>(TypeKind::CHAR); 
+        t->hardware_target = hw; 
+        return t; 
+    }
+    static TypePtr make_never(HardwareTarget hw = HardwareTarget::AUTO) { 
+        auto t = std::make_shared<Type>(TypeKind::NEVER); 
+        t->hardware_target = hw; 
+        return t; 
+    }
+    static TypePtr make_error(HardwareTarget hw = HardwareTarget::AUTO) { 
+        auto t = std::make_shared<Type>(TypeKind::ERROR); 
+        t->hardware_target = hw; 
+        return t; 
+    }
+    static TypePtr make_infer(HardwareTarget hw = HardwareTarget::AUTO) { 
+        auto t = std::make_shared<Type>(TypeKind::INFER); 
+        t->hardware_target = hw; 
+        return t; 
+    }
+    
+    // Tensor type: [batch, height, width, channels] with element type
+    static TypePtr make_tensor(std::vector<int64_t> shape, TypePtr dtype, HardwareTarget hw = HardwareTarget::AUTO) {
+        auto t = std::make_shared<Type>(TypeKind::TENSOR);
+        t->hardware_target = hw;
+        t->shape = std::move(shape);
+        t->dtype = dtype;
+        // Calculate element count
+        t->element_count = 1;
+        for (int64_t dim : t->shape) {
+            t->element_count *= dim;
+        }
+        return t;
+    }
+    
+    // Matrix type: 2D tensor [rows, cols]
+    static TypePtr make_matrix(int64_t rows, int64_t cols, TypePtr dtype, HardwareTarget hw = HardwareTarget::AUTO) {
+        auto t = std::make_shared<Type>(TypeKind::MATRIX);
+        t->hardware_target = hw;
+        t->shape = {rows, cols};
+        t->dtype = dtype;
+        t->element_count = rows * cols;
+        return t;
+    }
     
     static TypePtr make_type_var(TypeVariable* var) {
         auto t = std::make_shared<Type>(TypeKind::TYPE_VAR);

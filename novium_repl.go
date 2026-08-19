@@ -1,12 +1,14 @@
+//go:build repl
+
 // ============================================================================
-// novium_repl.go — Novium Read-Eval-Print Loop
+// novium_repl.go �?" Novium Read-Eval-Print Loop
 // ============================================================================
 //
 // Provides an interactive REPL for Novium code with support for:
 // - Multi-line input (:` blocks and `{}` inline)
 // - All CLI modes: --run, --check, --ast, --tokens, --codegen
-- Auto-completion and error recovery
-- History and basic editor features
+// - Auto-completion and error recovery
+// - History and basic editor features
 //
 // ============================================================================
 

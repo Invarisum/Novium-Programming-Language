@@ -1,0 +1,54 @@
+// =============================================================================
+# novium Python FFI + React Demo for .nvi Interpreter
+# Demonstrates: Python FFI integration and React/JSX bridge
+# Language: .nvi (Full-Stack Interpreted Novium)
+# =============================================================================
+
+# Python FFI - import and call Python functions
+python_import("math")
+let pi_val = python_call("pi")
+print("Python pi value: " + pi_val)
+
+# Calculate using Python's math module
+let area = python_call("pow", 5, 2)  # 5^2
+print("5^2 via Python: " + area)
+
+# Import specific module
+python_import("datetime")
+let now = python_call("datetime.now")
+print("Current time via Python: " + now)
+
+# React/JSX Bridge - compile JSX
+let jsx_source = <div>
+    <h1>Hello, Novium!</h1>
+    <p>This is a React component compiled from Novium .nvi</p>
+</div>
+
+let compiled_jsx = jsx_compile(jsx_source)
+print("Compiled JSX: " + compiled_jsx)
+
+# Create React element
+let element_props = {"class": "greeting", "id": "main-title"}
+let react_element = react_create("div", element_props)
+print("React element created: " + react_element)
+
+# Render React component
+let render_props = {"title": "Novium React Demo"}
+let render_result = react_render("App", render_props)
+print("React render result: " + render_result)
+
+# Full example: Python + React integration
+# Calculate a value in Python, pass to React
+let calc_result = python_call("math.sqrt", 144)
+print("sqrt(144) via Python: " + calc_result)
+
+# Use the result in React props
+let final_props = {"score": calc_result, "level": "expert"}
+let final_render = react_render("ScoreDisplay", final_props)
+print("Final React render: " + final_render)
+
+# Demonstrate async Python call (if supported)
+python_import("asyncio")
+# Note: async functions require await support in .nvi
+
+print("Python FFI + React demo complete!")

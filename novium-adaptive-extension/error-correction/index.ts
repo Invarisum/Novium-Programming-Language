@@ -122,7 +122,7 @@ export class ErrorCorrectionModule {
 
 // CLI interface if run directly
 if (require.main === module) {
-  const module = require('.');
+  const api = require('.');
   const args = process.argv.slice(2);
 
   if (args.length < 2) {
@@ -141,7 +141,7 @@ if (require.main === module) {
   const projectRoot = require('path').dirname(filePath);
 
   // Run error correction and compilation
-  module.ErrorCorrectionModule.prototype
+  api.ErrorCorrectionModule.prototype
     .runTerminalCompile(sourceCode, target, projectRoot)
     .then(() => {
       console.log('\n[Error Correction] Process complete.');

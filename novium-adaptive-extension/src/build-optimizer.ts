@@ -47,7 +47,7 @@ export class BuildOptimizer {
   }
 
   // Main build entry point
-  async build(projectRoot: string, files: string[]): Promise<any> {
+  async build(projectRoot: string, files: string[]): Promise<BuildResult> {
     const startTime = Date.now();
 
     // Load incremental state
@@ -57,23 +57,23 @@ export class BuildOptimizer {
     const { toCompile, cached } = await this.computeIncremental(files);
 
     // Compile files in parallel
-    const results = await this.parallelCompile(files);
+    const results = await this.parallelCompile(toCompile);
 
     // Update incremental state
     await this.updateIncrementalState(files);
 
-    const durationMs = Date.now() - Date.now(); // Would use actual start time
-    const cacheHitRate = files.length > 0 ? 1 : 0;
+    const durationMs = Date.now() - startTime;
+    const cacheHitRate = files.length > 0 ? cached.length / files.length : 0;
 
     return {
-      success: true,
-      durationMs: Date.now() - Date.now(),
-      filesCompiled: files.length,
-      filesCached: 0,
-      cacheHitRate: 0,
+      success: results.every(r => r.success),
+      durationMs,
+      filesCompiled: toCompile.length,
+      filesCached: cached.length,
+      cacheHitRate,
       outputSize: this.calculateOutputSize(),
-      warnings: [],
-      errors: []
+      warnings: this.collectWarnings(results),
+      errors: this.collectErrors(results)
     };
   }
 
@@ -110,34 +110,35 @@ export class BuildOptimizer {
 
     for (const file of files) {
       const content = await require('fs').promises.readFile(file, 'utf-8');
-      const hash = crypto.createHash('blake3').update(file).digest('hex');
+      const hash = crypto.createHash('sha256').update(content).digest('hex');
 
       const cachedHash = this.incrementalState?.fileHashes.get(file);
 
       if (cachedHash === hash && this.config.incremental) {
         // File unchanged, can use cached object file
         // In real implementation, would check if object file exists
+        cached.push(file);
       } else {
         toCompile.push(file);
       }
     }
 
-    return { toCompile, cached: [] };
+    return { toCompile, cached };
   }
 
   private async parallelCompile(files: string[]): Promise<any[]> {
     // Determine optimal batch size based on available memory
     const batchSize = this.computeOptimalBatchSize();
-    const results = [];
+    const results: any[] = [];
 
     // Process in batches
     for (let i = 0; i < files.length; i += batchSize) {
       const batch = files.slice(i, i + batchSize);
       const batchResults = await this.compileBatch(batch);
-      // Merge results
+      results.push(...batchResults);
     }
 
-    return [];
+    return results;
   }
 
   private computeOptimalBatchSize(): number {
@@ -168,14 +169,28 @@ export class BuildOptimizer {
     return results;
   }
 
-  private async updateIncrementalState(files: string[], results: any[]): Promise<void> {
+  private async updateIncrementalState(files: string[], results: any[] = []): Promise<void> {
     // Update state with new hashes
+    const crypto = require('crypto');
     for (const file of files) {
-      this.incrementalState!.fileHashes.set(file, 'updated');
+      const content = await require('fs').promises.readFile(file, 'utf-8');
+      this.incrementalState!.fileHashes.set(file, crypto.createHash('sha256').update(content).digest('hex'));
     }
     this.incrementalState!.lastBuild = new Date().toISOString();
     this.incrementalState!.configHash = this.computeConfigHash();
     await this.saveIncrementalState();
+  }
+
+  private async saveIncrementalState(): Promise<void> {
+    const fs = require('fs').promises;
+    const stateFile = require('path').join(this.config.cacheDir, 'incremental.json');
+    const data = {
+      ...this.incrementalState,
+      fileHashes: Object.fromEntries(this.incrementalState.fileHashes),
+      dependencyGraph: Object.fromEntries(this.incrementalState.dependencyGraph)
+    };
+    await fs.mkdir(require('path').dirname(stateFile), { recursive: true });
+    await fs.writeFile(stateFile, JSON.stringify(data, null, 2), 'utf-8');
   }
 
   private computeConfigHash(): string {
@@ -186,7 +201,7 @@ export class BuildOptimizer {
       optimizationFlags: this.config.optimizationFlags,
       defines: this.config.defines
     });
-    return crypto.createHash('blake3').update(configStr).digest('hex');
+    return crypto.createHash('sha256').update(configStr).digest('hex');
   }
 
   private calculateOutputSize(): number {
@@ -212,10 +227,18 @@ export class BuildOptimizer {
 
   // Generate optimized CMakeLists.txt for CMake-based projects
   generateCMakeConfig(projectName: string): string {
-    const target = this.config.target;
-    const optLevel = this.config.optimizationLevel;
+    if (this.config.target === 'cuda') {
+      return this.generateCudaCMake() + this.generateCommonCMake(projectName);
+    } else if (this.config.target === 'wasm') {
+      return this.generateWasmCMake() + this.generateCommonCMake(projectName);
+    } else {
+      return this.generateNativeCMake() + this.generateCommonCMake(projectName);
+    }
+  }
 
-    let cmake = `cmake_minimum_required(VERSION 3.20)
+  private generateCommonCMake(projectName: string): string {
+    const optLevel = this.config.optimizationLevel;
+    return `cmake_minimum_required(VERSION 3.20)
 project(${projectName} LANGUAGES CXX CUDA)
 
 # Novium Adaptive Build Configuration
@@ -227,30 +250,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Build type
-set(CMAKE_BUILD_TYPE ${this.config.optimizationLevel === 'speed' ? 'Release' : this.config.optimizationLevel === 'size' ? 'MinSizeRel' : 'RelWithDebInfo'})
+set(CMAKE_BUILD_TYPE ${optLevel === 'speed' ? 'Release' : optLevel === 'size' ? 'MinSizeRel' : 'RelWithDebInfo'})
 
 # Optimization flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${this.config.optimizationFlags.join(' ')}")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto=thin -Wl,--gc-sections")
+set(CMAKE_CXX_FLAGS "\${CMAKE_CXX_FLAGS} ${this.config.optimizationFlags.join(' ')}")
+set(CMAKE_EXE_LINKER_FLAGS "\${CMAKE_EXE_LINKER_FLAGS} -flto=thin -Wl,--gc-sections")
 
+# Parallel builds
+set(CMAKE_BUILD_PARALLEL_LEVEL ${this.config.parallelJobs})
 `;
-
-    if (this.config.target === 'cuda') {
-      return this.generateCudaCMake() + this.generateCommonCMake();
-    } else if (this.config.target === 'wasm') {
-      return this.generateWasmCMake() + this.generateCommonCMake();
-    } else {
-      return this.generateNativeCMake() + this.generateCommonCMake();
-    }
   }
 
   private generateNativeCMake(): string {
     return `# Native compilation
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native -flto=thin")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto=thin -Wl,--gc-sections")
-
-# Parallel builds
-set(CMAKE_BUILD_PARALLEL_LEVEL ${this.config.parallelJobs})
+set(CMAKE_CXX_FLAGS "\${CMAKE_CXX_FLAGS} -march=native -mtune=native -flto=thin")
+set(CMAKE_EXE_LINKER_FLAGS "\${CMAKE_EXE_LINKER_FLAGS} -flto=thin -Wl,--gc-sections")
 
 # Link-time optimization
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
@@ -259,11 +273,23 @@ add_executable(${this.config.target} main.cpp)
 `;
   }
 
+  private generateCudaCMake(): string {
+    return `# CUDA compilation
+find_package(CUDAToolkit REQUIRED)
+set(CMAKE_CUDA_ARCHITECTURES "native")
+set(CMAKE_CXX_FLAGS "\${CMAKE_CXX_FLAGS} -O3 -flto=thin")
+set(CMAKE_EXE_LINKER_FLAGS "\${CMAKE_EXE_LINKER_FLAGS} -flto=thin -Wl,--gc-sections")
+
+add_executable(${this.config.target} main.cu)
+target_link_libraries(${this.config.target} PRIVATE CUDA::cudart)
+`;
+  }
+
   private generateWasmCMake(): string {
     return `# WebAssembly Configuration
-set(CMAKE_TOOLCHAIN_FILE ${CMAKE_SOURCE_DIR}/emsdk/cmake/Modules/Platform/Emscripten.cmake)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s MODULARIZE=1")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s WASM=1 -s ALLOW_MEMORY_GROWTH=1")
+set(CMAKE_TOOLCHAIN_FILE \${CMAKE_SOURCE_DIR}/emsdk/cmake/Modules/Platform/Emscripten.cmake)
+set(CMAKE_CXX_FLAGS "\${CMAKE_CXX_FLAGS} -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s MODULARIZE=1")
+set(CMAKE_EXE_LINKER_FLAGS "\${CMAKE_EXE_LINKER_FLAGS} -s WASM=1 -s ALLOW_MEMORY_GROWTH=1")
 `;
   }
 }

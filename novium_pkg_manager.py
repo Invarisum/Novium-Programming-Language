@@ -91,6 +91,10 @@ def load_registry(url: str) -> dict[str, Any]:
 
 
 def exact_version(available: dict[str, Any], requirement: str) -> str:
+    if not available:
+        raise PackageError(
+            f"No versions are available for this package in the registry."
+        )
     if requirement in ("", "*", "latest"):  # latest = newest by semantic version
         return sorted(
             available.keys(),
@@ -127,6 +131,15 @@ def safe_extract(archive: bytes, destination: Path) -> None:
         archive_path.unlink(missing_ok=True)
 
 
+def safe_join(base: Path, *parts: str) -> Path:
+    """Join path parts under base, rejecting any traversal outside it."""
+    root = base.resolve()
+    candidate = root.joinpath(*parts).resolve()
+    if not candidate.is_relative_to(root):
+        raise PackageError(f"Unsafe path in package metadata: {Path(*parts)}")
+    return candidate
+
+
 def resolve_c_deps(
     c_deps: list[dict[str, str]], store: Path
 ) -> dict[str, dict[str, str]]:
@@ -141,8 +154,9 @@ def resolve_c_deps(
     for dep in c_deps:
         inc_rel = dep.get("include", "")
         lib_rel = dep.get("library", "")
-        inc_abs = (store / dep["version"] / inc_rel) if inc_rel else Path()
-        lib_abs = (store / dep["version"] / lib_rel) if lib_rel else Path()
+        version = str(dep.get("version", ""))
+        inc_abs = safe_join(store, version, inc_rel) if inc_rel else Path()
+        lib_abs = safe_join(store, version, lib_rel) if lib_rel else Path()
         # Also check common library extensions
         lib_found = False
         if lib_abs.exists():
@@ -205,18 +219,18 @@ def setup_c_environment(root: Path, selected: dict[str, dict[str, Any]]) -> None
     c_libraries: list[str] = []
 
     for name, entry in selected.items():
-        pkg_store = store / name / entry["version"]
+        pkg_store = safe_join(store, name, entry["version"])
         for dep in entry.get("c_dependencies", []):
             inc_rel = dep.get("include", "")
             lib_rel = dep.get("library", "")
             # Include path
             if inc_rel:
-                inc_path = pkg_store / inc_rel
+                inc_path = safe_join(pkg_store, inc_rel)
                 if inc_path.exists():
                     c_include_dirs.append(str(inc_path))
             # Library path
             if lib_rel:
-                lib_path = pkg_store / lib_rel
+                lib_path = safe_join(pkg_store, lib_rel)
                 if lib_path.exists():
                     c_library_dirs.append(str(lib_path))
                     c_libraries.append(
@@ -250,7 +264,7 @@ def install(root: Path, registry_url: str) -> None:
                 raise PackageError(
                     f"Checksum mismatch for {name}@{entry['version']}; installation aborted."
                 )
-            target = replacement / name / entry["version"]
+            target = safe_join(replacement, name, entry["version"])
             target.mkdir(parents=True, exist_ok=True)
             safe_extract(payload, target)
             write_json_atomic(target / ".novium-package.json", {"name": name, **entry})
@@ -283,37 +297,24 @@ def cmd_init(args: argparse.Namespace) -> None:
 def cmd_add(args: argparse.Namespace) -> None:
     root = project_root()
     manifest = load_json(manifest_path(root))
-    name, separator, requirement = args.package.partition("@")
+
+    # Split off any C dependency settings: name[@version][,c_include=...,c_library=...]
+    raw = args.package
+    c_part = ""
+    if "," in raw:
+        raw, c_part = raw.split(",", 1)
+        c_part = c_part.strip()
+
+    name, separator, requirement = raw.partition("@")
     if not name:
         raise PackageError("Package name cannot be empty.")
+
     manifest.setdefault("dependencies", {})[name] = requirement if separator else "*"
-    # Allow optional C dependencies: name@version,c_include=...,c_library=...
-    if "," in (requirement or ""):
-        pkg_part, c_part = requirement.split(",", 1)
-        pkg_name, _, pkg_ver = pkg_part.partition("@")
-        # Store c_dependencies in the manifest
-        c_deps: list[dict[str, str]] = []
-        # Parse C dependency settings: c_include=path,c_library=path
-        for c_setting in c_part.split(","):
-            c_setting = c_setting.strip()
-            if "=" in c_setting:
-                key, val = c_setting.split("=", 1)
-                key = key.strip()
-                val = val.strip()
-                if key == "c_include":
-                    # Store include path - will be resolved during install
-                    pass  # Handled during setup_c_environment
-                elif key == "c_library":
-                    # Store library path - will be resolved during install
-                    pass  # Handled during setup_c_environment
-        # Store the package version and note C dependencies
-        manifest["dependencies"][name] = pkg_ver if pkg_ver else "*"
-        # C dependencies will be processed during installation via setup_c_environment
-        # For now, just note them in the manifest
-        if "c_dependencies" not in manifest:
-            manifest["c_dependencies"] = {}
-        manifest["c_dependencies"][name] = c_part
-        # Write updated manifest
+    if c_part:
+        # Keep the raw C dependency settings; they are resolved during install
+        # by setup_c_environment using the registry metadata.
+        manifest.setdefault("c_dependencies", {})[name] = c_part
+
     write_json_atomic(manifest_path(root), manifest)
     install(root, args.registry)
 
