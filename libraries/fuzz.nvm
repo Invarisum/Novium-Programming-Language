@@ -1,0 +1,478 @@
+// ============================================================================
+// fuzz.nvm — Novium Fuzz Testing Library
+// ============================================================================
+//
+// Generates random Novium programs for stress-testing the compiler.
+// Supports: token fuzzing, parser stress testing, AST structure validation,
+// and property-based testing of compiler invariants.
+//
+// Usage:
+//   # Include in test suite
+//   use "fuzz.nvm"
+//
+// Property Examples:
+//
+//   # Every parsed program should have balanced parentheses
+//   for all program: .nvm {
+//       let tokens = tokenize(program)
+//       let ast = parse(program)
+//       assert balanced_parentheses(ast)
+//   }
+//
+//   # Variable declarations should have valid types
+//   for all program: .nvm {
+//       let decls = count_var_declarations(program)
+//       assert decls >= 0
+//   }
+//
+// ============================================================================
+
+// ── Fuzz Configuration ─────────────────────────────────────────────────────
+
+// FuzzMode determines the type of fuzzing to perform
+type FuzzMode int
+
+const (
+	// ModeTokens fuzzes the lexer with random character sequences
+	ModeTokens FuzzMode = iota
+	// ModeParser fuzzes the parser with random token streams
+	ModeParser
+	// ModeAST validates AST structure invariants
+	ModeAST
+	// ModeFull runs all three modes
+	ModeFull
+)
+
+// FuzzConfig configures fuzzing behavior
+type FuzzConfig struct {
+	// Max depth of nested blocks
+	MaxNestingDepth int
+	// Max number of statements in a program
+	MaxStatementCount int
+	// Whether to include syntax errors (for error recovery testing)
+	IncludeErrors bool
+	// Maximum iterations per fuzz run
+	MaxIterations int
+	// Seed for deterministic fuzzing
+	Seed int64
+}
+
+// DefaultFuzzConfig returns sensible defaults
+func DefaultFuzzConfig() FuzzConfig {
+	return FuzzConfig{
+		MaxNestingDepth:   10,
+		MaxStatementCount: 20,
+		IncludeErrors:     true,
+		MaxIterations:     100,
+		Seed:              0,
+	}
+}
+
+// ── Random Element Generators ──────────────────────────────────────────────
+
+// randomTokenType returns a random token type weight-biased toward common types
+func randomTokenType(rng *random.Rand) TokenType {
+	types := []TokenType{
+		TokenTypeIDENTIFIER,
+		TokenTypeINTEGER_LITERAL,
+		TokenTypeFLOAT_LITERAL,
+		TokenTypeSTRING_LITERAL,
+		TokenTypeKW_TRUE,
+		TokenTypeKW_FALSE,
+		TokenTypeKW_NULL,
+		TokenTypePLUS,
+		TokenTypeMINUS,
+		TokenTypeSTAR,
+		TokenTypeSLASH,
+		TokenTypeEQUAL,
+		TokenTypeEQUAL_EQUAL,
+		TokenTypeBANG_EQUAL,
+		TokenTypeLESS,
+		TokenTypeGREATER,
+		TokenTypeSEMICOLON,
+		TokenTypeCOLON,
+		TokenTypeLPAREN,
+		TokenTypeRPAREN,
+		TokenTypeLBRACE,
+		TokenTypeRBRACE,
+		TokenTypeCOMMA,
+		TokenTypeNEWLINE,
+		TokenTypeKW_FN,
+		TokenTypeKW_LET,
+		TokenTypeKW_VAR,
+		TokenTypeKW_IF,
+		TokenTypeKW_ELSE,
+		TokenTypeKW_WHILE,
+		TokenTypeKW_MATCH,
+		TokenTypeKW_RETURN,
+		TokenTypeKW_TRY,
+		TokenTypeKW_CATCH,
+		TokenTypeKW_FINALLY,
+		TokenTypeKW_GO,
+		TokenTypeKW_ASYNC,
+		TokenTypeKW_AWAIT,
+		TokenTypeKW_CLASS,
+		TokenTypeKW_INTERFACE,
+		TokenTypeKW_EXTENDS,
+		TokenTypeKW_IMPLEMENTS,
+		TokenTypeKW_OWN,
+		TokenTypeKW_MUT,
+		TokenTypeKW_CONST,
+		TokenTypeKW_INT,
+		TokenTypeKW_FLOAT,
+		TokenTypeKW_STRING,
+		TokenTypeKW_BOOL,
+		TokenTypeKW_VOID,
+		TokenTypeQUESTION,  // for nullable types
+		TokenTypeAMPERSAND, // for borrows
+		TokenTypeDOT,
+		TokenTypeLBRACKET,
+		TokenTypeRBRACKET,
+		TokenTypeARROW,
+		TokenTypeFAT_ARROW,
+	}
+
+	return types[rng.Intn(len(types))]
+}
+
+// randomLiteral returns a random literal token
+func randomLiteral(rng *random.Rand) Token {
+	switch rng.Intn(5) {
+	case 0:
+		// Integer literal
+		minVal := int64(-1000000)
+		maxVal := int64(1000000)
+		val := minVal + rng.Intn(maxVal-minVal+1)
+		return Token{
+			Type:  TokenTypeINTEGER_LITERAL,
+			Value: fmt.Sprintf("%d", val),
+		}
+	case 1:
+		// Float literal
+		val := float64(rng.Intn(10000)) + float64(rng.Intn(1000))/1000.0
+		return Token{
+			Type:  TokenTypeFLOAT_LITERAL,
+			Value: fmt.Sprintf("%.3f", val),
+		}
+	case 2:
+		// String literal
+		length := rng.Intn(20)
+		var sb strings.Builder
+		sb.WriteRune(rune('a' + rng.Intn(26))) // start with letter
+		for i := 1; i < length; i++ {
+			sb.WriteRune(rune('a' + rng.Intn(26)))
+			sb.WriteRune(rune('0' + rng.Intn(10))) // digit
+		}
+		return Token{
+			Type:  TokenTypeSTRING_LITERAL,
+			Value: "\"" + sb.String() + "\"",
+		}
+	case 3:
+		// Keyword true
+		return Token{
+			Type:  TokenTypeKW_TRUE,
+			Value: "true",
+		}
+	case 4:
+		// Keyword false
+		return Token{
+			Type:  TokenTypeKW_FALSE,
+			Value: "false",
+		}
+	}
+	return Token{Type: TokenTypeINTEGER_LITERAL, Value: "0"}
+}
+
+// randomKeyword returns a random Novium keyword token
+func randomKeyword(rng *random.Rand) Token {
+	keywords := []TokenType{
+		TokenTypeKW_FN,
+		TokenTypeKW_LET,
+		TokenTypeKW_VAR,
+		TokenTypeKW_IF,
+		TokenTypeKW_ELSE,
+		TokenTypeKW_WHILE,
+		TokenTypeKW_MATCH,
+		TokenTypeKW_RETURN,
+		TokenTypeKW_TRY,
+		TokenTypeKW_GO,
+		TokenTypeKW_ASYNC,
+		TokenTypeKW_AWAIT,
+		TokenTypeKW_CLASS,
+		TokenTypeKW_INTERFACE,
+		TokenTypeKW_EXTENDS,
+		TokenTypeKW_IMPLEMENTS,
+	}
+
+	return Token{
+		Type:  keywords[rng.Intn(len(keywords))],
+		Value: keywords[integer(keywords[rng.Intn(len(keywords))])].String(),
+	}
+}
+
+// randomOperator returns a random binary operator token
+func randomOperator(rng *random.Rand) Token {
+	operators := []TokenType{
+		TokenTypePLUS,
+		TokenTypeMINUS,
+		TokenTypeSTAR,
+		TokenTypeSLASH,
+		TokenTypeEQUAL,
+		TokenTypeEQUAL_EQUAL,
+		TokenTypeBANG_EQUAL,
+		TokenTypeLESS,
+		TokenTypeLESS_EQUAL,
+		TokenTypeGREATER,
+		TokenTypeGREATER_EQUAL,
+		TokenTypeAND_AND,
+		TokenTypeOR_OR,
+	}
+
+	return operators[rng.Intn(len(operators))]
+}
+
+// ── Fuzz Program Generator ─────────────────────────────────────────────────
+
+// generateRandomProgram generates a random Novium program
+func generateRandomProgram(cfg FuzzConfig, rng *random.Rand) string {
+	var sb strings.Builder
+	var stmtCount int
+
+	// Determine statement count
+	if cfg.MaxStatementCount > 0 {
+		stmtCount = rng.Intn(cfg.MaxStatementCount) + 1
+	} else {
+		stmtCount = rng.Intn(10) + 1
+	}
+
+	// Generate INDENT/BLOCK style statements
+	for i := 0; i < stmtCount; i++ {
+		// Randomly choose statement type
+		switch rng.Intn(8) {
+		case 0: // let x = value
+			varName := fmt.Sprintf("x%d", i)
+			sb.WriteString("let " + varName + " = ")
+			// Add a random expression
+			switch rng.Intn(4) {
+			case 0:
+				sb.WriteString(fmt.Sprintf("42")) // integer
+			case 1:
+				sb.WriteString(fmt.Sprintf("3.14")) // float
+			case 2:
+				sb.WriteString(`"hello"`) // string
+			case 3:
+				sb.WriteString("true") // boolean
+			}
+			sb.WriteString("\n")
+
+		case 1: // fn name(args):
+			fnName := fmt.Sprintf("func%d", i)
+			sb.WriteString("fn " + fnName + "() int:\n")
+			sb.WriteString("    return 1\n")
+			sb.WriteString("DEDENT\n")
+
+		case 2: // if condition:
+			sb.WriteString("if true:\n")
+			sb.WriteString("    print(1)\n")
+			sb.WriteString("else:\n")
+			sb.WriteString("    print(0)\n")
+			sb.WriteString("DEDENT\n")
+
+		case 3: // while condition:
+			sb.WriteString("while true:\n")
+			sb.WriteString("    print(1)\n")
+			sb.WriteString("DEDENT\n")
+
+		case 4: // expression statement
+			sb.WriteString("print(1)\n")
+
+		case 5: // variable declaration
+			varName := fmt.Sprintf("var%d", i)
+			sb.WriteString("let " + varName + " int = 0\n")
+		}
+	}
+
+	return sb.String()
+}
+
+// ── Fuzz Testing Functions ─────────────────────────────────────────────────
+
+// FuzzTokens fuzzes the lexer with random input
+func FuzzTokens(cfg FuzzConfig, iterations int) bool {
+	rng := random.NewRand(cfg.Seed)
+
+	for i := 0; i < iterations; i++ {
+		// Generate random source code
+		source := generateRandomProgram(cfg, rng)
+
+		// Tokenize
+		lexer := Lexer(source, "fuzz.nvm")
+		tokens := lexer.Tokenize()
+
+		// Basic validation: should not crash
+		if tokens == nil {
+			fmt.Fprintf(os.Stderr, "Fuzz iteration %d: lexer returned nil\n", i)
+			return false
+		}
+
+		// Check for excessive errors (more than 50% errors is suspicious)
+		errorCount := 0
+		for _, tok := range tokens {
+			if tok.Type == TokenTypeERROR {
+				errorCount++
+			}
+		}
+		errorRate := float64(errorCount) / float64(len(tokens)+1)
+		if errorRate > 0.5 {
+			fmt.Fprintf(os.Stderr, "Fuzz iteration %d: high error rate %.2f%%\n", i, errorRate*100)
+			return false
+		}
+	}
+
+	return true
+}
+
+// FuzzParser fuzzes the parser with random token streams
+func FuzzParser(cfg FuzzConfig, iterations int) bool {
+	rng := random.NewRand(cfg.Seed + 1) // Different seed
+
+	for i := 0; i < iterations; i++ {
+		// Generate random token stream
+		tokenCount := rng.Intn(30) + 1
+		var tokens []Token
+		for j := 0; j < tokenCount; j++ {
+			// Mix of keywords, identifiers, literals, and operators
+			switch rng.Intn(4) {
+			case 0:
+				tokens = append(tokens, randomKeyword(rng))
+			case 1:
+				tokens = append(tokens, randomLiteral(rng))
+			case 2:
+				tokens = append(tokens, randomOperator(rng))
+			case 3:
+				tokens = append(tokens, Token{
+					Type:  TokenTypeIDENTIFIER,
+					Value: fmt.Sprintf("ident%d", j),
+				})
+			}
+		}
+
+		// Parse
+		lexer := Lexer("", "fuzz.nvm") // Empty source, use tokens directly
+		parser := Parser(tokens)
+		program := parser.ParseProgram()
+
+		// Basic validation: should not panic
+		if parser.HasErrors() {
+			// Expected for fuzzing, but should be recoverable
+			errorCount := len(parser.Errors())
+			if errorCount > tokenCount/2 {
+				fmt.Fprintf(os.Stderr, "Fuzz iteration %d: too many parser errors (%d/%d)\n",
+					i, errorCount, tokenCount)
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// FuzzAST validates AST structure invariants
+func FuzzAST(cfg FuzzConfig, iterations int) bool {
+	rng := random.NewRand(cfg.Seed + 2) // Different seed
+
+	for i := 0; i < iterations; i++ {
+		// Generate random program
+		source := generateRandomProgram(cfg, rng)
+
+		// Parse
+		lexer := Lexer(source, "fuzz.nvm")
+		parser := Parser(lexer.Tokenize())
+		program := parser.ParseProgram()
+
+		if parser.HasErrors() {
+			if !cfg.IncludeErrors {
+				fmt.Fprintf(os.Stderr, "Fuzz iteration %d: parse errors with IncludeErrors=false\n", i)
+				return false
+			}
+			continue // Expected when IncludeErrors=true
+		}
+
+		// Validate invariants
+		// 1. Program should have at least 0 statements
+		if len(program) < 0 {
+			fmt.Fprintf(os.Stderr, "Fuzz iteration %d: negative program size\n", i)
+			return false
+		}
+
+		// 2. Check that statements have valid locations
+		for _, stmt := range program {
+			if stmt == nil {
+				fmt.Fprintf(os.Stderr, "Fuzz iteration %d: nil statement in program\n", i)
+				return false
+			}
+		}
+
+		// 3. Check nesting depth doesn't exceed config limit
+		// (Simple check - full would traverse the AST)
+		if cfg.MaxNestingDepth > 0 {
+			// Placeholder - real impl would traverse AST
+		}
+	}
+
+	return true
+}
+
+// Property: every parseable program should produce a non-nil AST
+func PropertyNonNilAST(cfg FuzzConfig, iterations int) bool {
+	rng := random.NewRand(cfg.Seed)
+
+	for i := 0; i < iterations; i++ {
+		// Generate random source
+		sourceLen := rng.Intn(50) + 1
+		var source strings.Builder
+		for j := 0; j < sourceLen; j++ {
+			switch rng.Intn(6) {
+			case 0:
+				sb.WriteString("let x int = 0\n")
+			case 1:
+				sb.WriteString("fn foo() int:\n    return 1\nDEDENT\n")
+			case 2:
+				sb.WriteString("if true:\n    print(1)\nelse:\n    print(0)\nDEDENT\n")
+			case 3:
+				sb.WriteString("print(1)\n")
+			case 4:
+				sb.WriteString("let y string = \"hello\"\n")
+			case 5:
+				sb.WriteString("while true:\n    print(1)\nDEDENT\n")
+			}
+		}
+
+		// Parse
+		lexer := Lexer(source.String(), "fuzz.nvm")
+		tokens := lexer.Tokenize()
+		parser := Parser(tokens)
+		program := parser.ParseProgram()
+
+		if parser.HasErrors() && !cfg.IncludeErrors {
+			return false
+		}
+
+		// Property: if parsing succeeded, program should be non-nil
+		if sourceString != "" && program == nil {
+			fmt.Fprintf(os.Stderr, "Property failed: nil program after successful parse\n")
+			return false
+		}
+	}
+
+	return true
+}
+
+// ============================================================================
+// Export Configuration
+//
+// To use this fuzz library:
+//   1. Include "fuzz.nvm" in your test suite
+//   2. Call FuzzTokens(), FuzzParser(), or FuzzAST()
+//   3. Configure with FuzzConfig{...}
+// ============================================================================

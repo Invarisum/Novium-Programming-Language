@@ -1,0 +1,12 @@
+// test_match.nvm — Pattern matching test program
+fn classify(status int) int:
+    match status:
+        1 => print("active")
+        2 => print("inactive")
+        3 => print("pending")
+        _ => print("unknown")
+
+fn main() -> void:
+    classify(1)
+    classify(2)
+    classify(5)

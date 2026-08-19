@@ -1,0 +1,4 @@
+fn main() void:
+    let x: string = 42  # type mismatch
+    let y: int = "hello"  # type mismatch
+    print(1, 2)  # wrong arg count

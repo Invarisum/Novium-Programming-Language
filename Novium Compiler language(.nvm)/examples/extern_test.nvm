@@ -1,0 +1,5 @@
+# Test extern C-ABI function declaration
+extern fn c_puts(message: string) -> void:
+
+fn main() -> void:
+    c_puts("Hello from C-ABI!")

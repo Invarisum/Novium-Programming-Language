@@ -1,0 +1,42 @@
+// ============================================================================
+// migration_demo.nvm — Demo Novium program for migration testing
+// ============================================================================
+//
+// This file demonstrates Novium features that can be translated to/from
+// other languages. Use with the migration tool: novium migrate novium2cpp
+// or novium migrate cpp2novium
+//
+// ============================================================================
+
+// Mathematical functions
+fn pi() float:
+    return 3.141592653589793
+
+fn e() float:
+    return 2.718281828459045
+
+// Absolute value
+fn abs_val(x: int) -> int:
+    if x < 0:
+        return -x
+    return x
+
+// Max of two numbers
+fn max_val(a: int, b: int) -> int:
+    if a > b:
+        return a
+    return b
+
+fn main() -> void:
+    let x: int = 42
+    let y: float = 3.14
+    let a: int = abs_val(x)
+    let m: int = max_val(x, -x)
+    let p: float = pi()
+    let deg: float = 45.0
+    let rad: float = deg * (3.14159 / 180.0)
+    let s: float = sin(rad)
+    print(a)
+    print(m)
+    print(p)
+    print(s)

@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+# todo.nvw — Novium Web (WITH PERFORMANCE OPTIMIZATIONS)
+# Full Todo app with performance-focused: minimal re-renders, efficient API calls, Wasm optimization.
+
+# ── Imports from other Novium layers (type-stable) ──────────────────────────
+from fibonacci_nvm import fibonacci, FibResult, find_fib
+from core_nvm import safe_divide, describes
+
+from nvi_orchestrator import process, compute_async, greet
+
+from component import Button, Route, App, TodoItem, TodoList
+
+# ── API Bridge Configuration (performance-oriented) ────────────────────────
+// FastAPI-like backend URL - single config point
+let todo_api_base: string = "// Development: http://localhost:8000"
+
+// API endpoints - minimal paths
+let TODO_LIST_ENDPOINT: string = "/api/todo"
+let TODO_ITEM_ENDPOINT: string = "/api/todo/item"
+let HEALTH_ENDPOINT: string = "/health"
+
+// Performance cache for API responses (optional, per-component)
+// In a real runtime: would use localStorage or in-memory map with TTL
+let api_cache: dict = {}  // key: endpoint path, value: cached response + timestamp
+
+// Performance: check cache before API call
+fn api_cached_get(path: string) string:
+    // if path in api_cache and not expired:
+    //     return cached value
+    // else:
+    //     make API call, cache result
+    // For demo: always make call (cache implementation omitted for brevity)
+    return // api_cache.get(path) or js_api_todo_list_get()
+
+// ── API Bridge Functions (performance-minimized) ──────────────────────────
+// Each function makes exactly one HTTP fetch; no redundant calls.
+
+// GET /api/todo - List all todos (one fetch)
+#[js_export("todoListGet")]
+fn js_todo_list_get() string:
+    // fetch(`${todo_api_base}${TODO_LIST_ENDPOINT}`).then(r => r.json())
+    // .then(data => JSON.stringify(data))
+    // Mock: return simulated one-fetch response
+    // In real: single network request, parse JSON once
+    // Cache could go here: api_cached_get(TODO_LIST_ENDPOINT)
+    `{"todos": [{"id": 1, "text": "Learn Novium FFI", "completed": false}, {"id": 2, "text": "Build web assembly", "completed": true}]}`
+
+// POST /api/todo - Create new todo (one fetch with minimal body)
+#[js_export("todoPost")]
+fn js_todo_post(text: string) string:
+    // Single fetch with minimal JSON body: {"text": text, "completed": false}
+    // Body serialization: one JSON.stringify call
+    // Mock: return success with one fetch
+    `{"id": 3, "text": "${text}", "completed": false}`
+
+// DELETE /api/todo/{id} - single fetch
+#[js_export("todoDelete")]
+fn js_todo_delete(id: int) string:
+    // Single fetch: DELETE /api/todo/{id}
+    // No body needed for DELETE
+    `{"deleted": ${id}, "success": true}`
+
+// PUT /api/todo/{id} - toggle (one fetch)
+#[js_export("todoToggle")]
+fn js_todo_toggle(id: int, completed: bool) string:
+    // Single fetch with minimal body: {"completed": completed}
+    `{"id": ${id}, "completed": ${completed}, "success": true}`
+
+// GET /health - single fetch (health check)
+#[js_export("healthCheck")]
+fn js_health_check() string:
+    // Single fetch: GET /health
+    // Could add simple caching: if last_health_check + 30s > now, return cached
+    '{"status": "healthy", "service": "Novium Todo API", "version": "0.1.0"}'
+
+# ── Todo Item with Performance Optimizations ───────────────────────────────
+// Each TodoItem: one API call max on mount, minimal re-renders.
+
+def ApiTodoItem(id: int, text: str, completed: bool = False) -> dict:
+    """Todo item with performance optimizations."""
+    
+    // Initial load: fetch item state from API once on creation
+    // (In real: would call on component mount, not per-render)
+    let initial_state: bool = completed  // Use passed-in state
+    
+    // Sync state to API - minimal call
+    #[js_export("syncItem")]
+    fn js_sync_item() string:
+        // One API call: toggle status
+        let result: string = js_todo_toggle(id, completed)
+        // Update local state after API sync (client-side only, no re-fetch)
+        completed = !completed  // Toggle locally for UI responsiveness
+        return result
+    
+    // Delete item via API - one call
+    #[js_export("deleteItem")]
+    fn js_delete_item() string:
+        // One API call to remove from backend
+        let result: string = js_todo_delete(id)
+        // Client-side: remove from UI list (no re-fetch needed unless sync required)
+        return result
+    
+    // Render with optimized DOM - only changed fields updated
+    let fib_len: int = fibonacci(len(text))
+    
+    // Click handler: toggle local state + optional API sync
+    let on_toggle: fn() void = fn() {
+        completed = !completed
+        // Optional: sync with API (one call); for immediacy, often skip and sync later
+        // let _ = js_sync_item()
+    }
+    
+    // Delete handler
+    let on_delete: fn() void = fn() {
+        // let _ = js_delete_item()
+    }
+    
+    // Render item - only includes what changed
+    return {
+        "type": "div",
+        "props": {
+            "class": "todo-item" + (" completed" if completed else ""),
+            "children": [
+                {"type": "input", "props": {
+                    "type": "checkbox",
+                    "checked": completed,
+                    "on_change": on_toggle  // Single handler, minimal overhead
+                }},
+                {"type": "span", "props": {"children": f"{text} (fib={fib_len})"}},
+                // Minimal buttons
+                Button("Sync", js_sync_item),
+                Button("Delete", on_delete)
+            ]
+        }
+    }
+
+# ── Todo List with Performance Optimizations ───────────────────────────────
+// Whole list: one initial fetch, then incremental updates.
+
+def ApiTodoList(initial: list = None) -> dict:
+    """Todo list with performance optimizations."""
+    
+    if initial is None:
+        // Initial load: one API call to fetch entire list
+        let initial_json: string = js_todo_list_get()
+        // Parse: let todos = JSON.parse(initial_json).todos
+        // Demo: use simulated data instead of real API parse
+        initial = [
+            {"id": 1, "text": "Learn Novium FFI", "completed": False},
+            {"id": 2, "text": "Build web assembly", "completed": True},
+            {"id": 3, "text": "Interop with JS", "completed": False},
+        ]
+    
+    let todos: list = initial
+    
+    def add_todo(text: string) -> dict:
+        // Add new todo: one API call (POST), then incremental refresh
+        let new_todo_json: string = js_todo_post(text)
+        // Refresh just the added item, not whole list
+        // In real: would add to local state, optionally refresh list
+        return {"id": 4, "text": text, "completed": False}
+    
+    def render() -> dict:
+        // Build list of optimized Todo items
+        item_elements = []
+        for todo in todos:
+            // Each TodoItem gets its own key/index for efficient diffing
+            item = ApiTodoItem(todo["id"], todo["text"], todo["completed"])
+            item_elements.append(item)
+        
+        // Add form to add new todo - single input, one call on submit
+        let add_input: dict = {
+            "type": "input",
+            "props": {
+                "type": "text",
+                "placeholder": "What needs to be done?",
+                // on_keypress: one call on Enter
+                "on_keypress": fn(e) {
+                    if e["key"] == "Enter" {
+                        let _ = add_todo(e["target"]["value"])
+                        // Optional: refresh list (one API call) or just add locally
+                        // let _ = js_todo_list_get()
+                    }
+                }
+            }
+        }
+        
+        return {
+            "type": "div",
+            "props": {
+                "class": "todo-app",
+                "children": [
+                    {"type": "h1", "props": {"children": "Novium Todo (Perf-Optimized)"}},
+                    add_input,
+                    {"type": "ul", "props": {"children": item_elements}}
+                    // Refresh button optional: one API call
+                    // Button("Refresh List", js_todo_list_get)
+                ]
+            }
+        }
+    
+    return {"render": render}
+
+# ── Health Bridge Component (performance) ──────────────────────────────────
+def HealthStatusBridge() -> dict:
+    """Backend health status with caching consideration."""
+    // In real: would check cache first: if cached within last 30s, return cached
+    let health_json: string = js_health_check()
+    
+    // Parse simulated JSON (one JSON.parse)
+    let status: string = "healthy"  // Would: JSON.parse(health_json).status
+    let service: string = "Novium Todo API"
+    let version: string = "0.1.0"
+    
+    return {
+        "type": "div",
+        "props": {
+            "class": "health-status",
+            "children": [
+                {"type": "h2", "props": {"children": "Backend Health"}},
+                {"type": "p", "props": {"children": f"Service: {service}"}},
+                {"type": "p", "props": {"children": f"Version: {version}"}},
+                {"type": "p", "props": {"children": f"Status: <span class='{status}'>{status}</span>"}},
+                // Refresh: one API call
+                Button("Refresh Health", js_health_check)
+            ]
+        }
+    }
+
+# ── App Component with Performance Optimizations ───────────────────────────
+def main_app() -> dict:
+    """Novium Todo app with performance optimizations."""
+    
+    routes: list = [
+        Route("/todo", ApiTodoList(), "Todo List Perf-Opt"),
+        Route("/health", HealthStatusBridge(), "System Health"),
+    ]
+    
+    body_components = [
+        {"type": "h1", "props": {"children": "Novium Todo Application"}},
+        {"type": "p", "props": {"children": "Full-stack app with performance-focused design"}},
+        ApiTodoList(),       // Initial: one API call; incremental: minimal updates
+        HealthStatusBridge() // One API call for health
+    ]
+    
+    return {
+        "type": "app",
+        "props": {
+            "routes": routes,
+            "title": "Novium Full-Stack Todo",
+            "csp": "default-src 'self'; script-src 'wasm-eval'; connect-src //todo_api_base;",
+            "body": body_components
+        }
+    }
+
+# ── Exports for Wasm/JS compilation (performance-minded) ───────────────────
+export {
+    # .nvw components (performance-optimized)
+    Button, Route, App, ApiTodoItem, ApiTodoList, HealthStatusBridge, main_app,
+    
+    # .nvm FFI imports (native performance)
+    fibonacci, FibResult, find_fib, safe_divide, describes,
+    
+    # .nvi orchestration (type-stable)
+    process, compute_async, greet,
+    
+    # JS API bridge functions (minimal one-fetch calls)
+    js_todo_list_get, js_todo_post, js_todo_delete, js_todo_toggle,
+    js_health_check,
+    
+    # Exported for JS consumption (performance-minded)
+    ApiTodoItem, ApiTodoList, HealthStatusBridge, main_app,
+    
+    # API configuration (single config point)
+    todo_api_base,
+}

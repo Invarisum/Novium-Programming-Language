@@ -1,0 +1,61 @@
+# Novium Ownership Patterns for AI Code Generation
+
+## Primitives Copy
+
+```novium
+let x: int = 42
+let y: int = x  // y is a copy; x still valid after this line
+print(${x})  // OK: x still valid
+print(${y})  // OK: y is independent
+```
+
+## Complex Types Move by Default
+
+```novium
+let s: string = "hello"
+// Without explicit ownership, string moves into function
+let process: fn(string) void = fn(s: string) void:
+    print(${s})
+
+process(s)  // s moved INTO process; CAN'T use s after this line
+// print(${s})  // COMPILE ERROR: s no longer valid
+```
+
+## Fix: Clone if Need to Keep Original
+
+```novium
+let s: string = "hello"
+let s2: string = s.clone()  // s2 is copy; s still valid
+process(s)  // s moved, but s2 still valid
+```
+
+## Fix: Borrow Instead
+
+```novium
+let s: string = "hello"
+let s_ref: &string = &s  // Borrow; s still valid
+process(*s_ref)  // Dereference and pass; s still valid after
+```
+
+## own Keyword for Explicit Transfer
+
+```novium
+// Explicitly transfer ownership
+let s: string = "data"
+fn process(own s: string) void:
+    print(${s})
+
+process(own s)  // s transferred; CAN'T use after this line
+// OR:
+// process(own s.clone())  // Clone first, then transfer clone
+```
+
+## Summary Rules
+
+| Situation | Action |
+|-----------|--------|
+| Primitives (int, float, bool) | Copy automatically |
+| Complex types (string, vector, struct) | Move by default |
+| Need to keep original | Use `.clone()` or `&` borrow |
+| Want explicit transfer | Use `own` keyword |
+| Just need to read | Use `&` reference |

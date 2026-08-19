@@ -1,0 +1,55 @@
+# Novium Anti-Patterns & Corrections for AI Code Generation
+
+## Common Anti-Patterns and Fixes
+
+| Anti-Pattern | Correction |
+|-------------|------------|
+| `print(${undefined_var})` | Add variable declaration first, or use `let x: int = 0` with initialization |
+| `fn process(s: string) void: print(${s})` without `own`/`&` awareness | Use `own` for transfer or `&` for borrow; document ownership semantics |
+| `match n: 0 => "zero" 1 => "one"` (non-exhaustive) | Always add `_ => "other"` catch-all |
+| `fn recursive(n: int) int: return n * recursive(n - 1)` without base case/guard | Add `if n <= 1: return n` base case + `depth` guard (max 256) |
+| `let char: string = s[100]` on short string | Use `s.at(100)` (returns optional) or check `s.len() > 100` first |
+| `go fn: { ... }` without structured concurrency | Use `async fn main()` with `await_all()` or channel-limited spawning |
+| API endpoint without `#[description]`/`#[response]` | Add annotations for documentation generation |
+| Forgetting `own` semantics on function arguments | Remember: primitives copy; complex types move; use `own` for explicit transfer |
+
+## Specific Error Fixes
+
+### 1. "value moved here; cannot be used"
+```
+let v: vector[int] = new_vector[int]()
+push(v, 1)
+use(v)  // ERROR: v moved
+// Fix: use v.clone() or &v borrow
+```
+
+### 2. "non-exhaustive match"
+```
+match n:
+    0 => "zero"
+    1 => "one"
+// Fix: add _ => "other"
+match n:
+    0 => "zero"
+    1 => "one"
+    _ => "other"
+```
+
+### 3. "index out of bounds"
+```
+let s: string = "hi"
+let c: string = s[100]  // ERROR
+// Fix: use safe access
+let c: optional string = s.at(100)  // None for out of bounds
+```
+
+### 4. "optional value must be handled"
+```
+let result: optional int = divide(10, 0)
+// Fix: always match both cases
+match result:
+    some val:
+        print(${val})
+    none:
+        print("Error message")
+```

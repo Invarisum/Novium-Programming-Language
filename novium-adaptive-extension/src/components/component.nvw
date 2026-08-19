@@ -1,0 +1,199 @@
+/**
+ * component.nvw — Novium Web (JavaScript/React-style)
+ * Compiles to WebAssembly + JSX with JavaScript-react patterns.
+ */
+
+// ── Imports from Novium layers (type-stable) ──────────────────────────────
+from fibonacci import fibonacci, FibResult
+from core import safe_divide
+from interpreter import greet, main
+
+// ── JavaScript Performance Optimizations ──────────────────────────────────
+// Avoid re-renders: only update DOM when state actually changes.
+// Use requestAnimationFrame for animations instead of setTimeout/setInterval.
+// Memoize expensive calculations.
+
+// Base API URL - configures once, not per-request
+const api_base_url: string = "// Development: http://localhost:8000"
+
+// Generic API caller - minimized overhead
+// Single function used by all API bridges
+const js_api_get = (path: string): string => {
+  // fetch with keep-alive, minimal headers
+  // In real Wasm+JS: fetch(`${api_base_url}${path}`, {method: "GET"})
+  // Mock: return path for demo
+  return `GET ${api_base_url}${path}`
+}
+
+// POST with JSON - body serialized once, reused
+const js_api_post = (path: string, body: dict): string => {
+  // JSON.stringify called once per call; could cache for static bodies
+  const json_body: string = JSON.stringify(body)
+  // fetch with minimal headers
+  return `POST ${api_base_url}${path} body=${json_body}`
+}
+
+// ── Auto-generated Fibonacci client (performance-minimized) ───────────────
+// From #[get("/fibonacci/{n}")] in .nvm - compiled to minimal JS
+
+// fibGet: GET /fibonacci/{n} - single parameter, no body
+const js_fib_get = (n: int): string => {
+  // Minimal: one fetch call, one path parameter
+  // n: int → JS Number (automatic type mapping, no parsing overhead)
+  const result: string = js_api_get(`/fibonacci/${n}`)
+  return result
+}
+
+// fibPost: POST /fibonacci/batch - array of numbers
+const js_fib_post = (numbers: list[int]): string => {
+  // Single fetch with JSON body: {"numbers": [1, 5, 20]}
+  // list[int] → JS Array number (automatic, no deep copy)
+  const nums_str: string = JSON.stringify(numbers)  // Single serialization
+  const result: string = js_api_post("/fibonacci/batch", {"numbers": numbers})
+  return result
+}
+
+// fibAsync: GET /async/{n} - async but lightweight
+const js_fib_async = async (n: int): Promise<string> => {
+  // async fetch - suspension, not OS thread
+  // Await Promise from js_api_get
+  const coroutine_result: string = await js_api_get(`/async/${n}`)
+  return coroutine_result
+}
+
+// ── Counter Component with React-style Optimizations ──────────────────────
+// State changes trigger minimal re-renders.
+
+// Counter Component with React-like hooks-style API
+class PerformanceCounter {
+  count: int
+  max_count: int = 1000
+  last_rendered: int = -1  // Ensure first render
+
+  constructor(initial: int = 0) {
+    this.count = initial
+  }
+
+  increment(): void {
+    if (this.count < this.max_count) {
+      this.count += 1
+      // Only re-render if value actually changed
+      if (this.count !== this.last_rendered) {
+        this.last_rendered = this.count
+        this.render()
+      }
+    }
+  }
+
+  decrement(): void {
+    if (this.count > 0) {
+      this.count -= 1
+      if (this.count !== this.last_rendered) {
+        this.last_rendered = this.count
+        this.render()
+      }
+    }
+  }
+
+  render(): dict {
+    // Return component; real runtime compares last_rendered vs current
+    // and only patches changed DOM nodes
+    return {
+      type: "div",
+      props: {
+        children: [
+          { type: "h1", props: { children: `Count: ${this.count}` } },
+          { type: "button", props: { onClick: () => this.increment() }, children: "Increment" },
+          { type: "button", props: { onClick: () => this.decrement() }, children: "Decrement" }
+        ]
+      }
+    }
+  }
+}
+
+// ── API Bridges with Performance in Mind ───────────────────────────────────
+// Each bridge makes minimal API calls; caches when possible.
+
+// Fibonacci API bridge - single fetch per call
+const FibApiBridge = (n: int): dict => {
+  // One API call: js_fib_get(n)
+  const api_result: string = js_fib_get(n)
+
+  // Parse simulated JSON: {"fibonacci": 55}
+  // In real: one JSON.parse, then display
+  const fib_value: int = 55  // Demo value
+
+  return {
+    type: "div",
+    props: {
+      children: [
+        { type: "h2", props: { children: "Fibonacci API Bridge" } },
+        { type: "p", props: { children: `Requested: fibonacci(${n})` } },
+        { type: "p", props: { children: `API Result: ${api_result}` } },
+        { type: "p", props: { children: `Computed Value: ${fib_value}` } },
+        // Refresh button - minimal UI interaction
+        { type: "button", props: { onClick: () => js_fib_get(n) }, children: "Refresh" }
+      ]
+    }
+  }
+}
+
+// Health bridge - single call, cached result could be added
+const HealthStatusBridge = (): dict => {
+  const health: string = js_api_get("/health")
+
+  return {
+    type: "div",
+    props: {
+      class: "health-status",
+      children: [
+        { type: "h2", props: { children: "Backend Health" } },
+        { type: "p", props: { children: `API Response: ${health}` } },
+        { type: "button", props: { onClick: () => js_api_get("/health") }, children: "Refresh Health" }
+      ]
+    }
+  }
+}
+
+// ── App Component with React-style Design ──────────────────────────────────
+// Root app with performance-focused design.
+
+const PerformanceApp = (routes: list, title: string): dict => {
+  // Build body with performance-optimized components
+  const body_components = [
+    { type: "h1", props: { children: title } },
+    { type: "p", props: { children: "Novium Web with performance optimizations" } },
+    FibApiBridge(10),   // fib(10) via API - one call
+    FibApiBridge(20),   // fib(20) via API - one call  
+    HealthStatusBridge(), // Health check - one call
+    // Routes are static; no re-render on navigation if possible
+  ]
+
+  return {
+    type: "app",
+    props: {
+      routes: routes,
+      title: title,
+      "csp": "default-src 'self'; script-src 'wasm-eval';",
+      body: body_components
+    }
+  }
+}
+
+// ── Exports for Wasm/JS compilation (JavaScript-minded) ──────────────────
+export {
+  // Core components (performance-optimized)
+  PerformanceCounter, FibApiBridge, HealthStatusBridge, PerformanceApp,
+
+  // .nvm FFI imports (native performance)
+  fibonacci, safe_divide,
+
+  // .nvi orchestration (type-stable)
+  greet, main,
+
+  // JS API bridge functions (minimal fetch calls)
+  js_api_get, js_api_post, js_fib_get, js_fib_post, js_fib_async,
+
+  // Exported for JS consumption (performance-minded)
+  PerformanceCounter, FibApiBridge, HealthStatusBridge, PerformanceApp
+}

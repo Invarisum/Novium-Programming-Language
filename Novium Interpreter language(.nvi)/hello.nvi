@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+# hello.nvi — Novium Interpreter (Python-style)
+# Python-like syntax with type-specialized execution speed.
+# Type annotations enable runtime optimizations.
+
+# ── Import compiled Novium module (type-stable, fast) ─────────────────────
+import "hello.nvm"
+
+# Type-annotated call: .nvm fn with unboxed int return
+# 'greet' returns void; no return value to optimize
+greet("World")  # string interpolation: ${} is fast with f-strings
+
+# Import math functions (also type-stable)
+import math from "fibonacci.nvm"
+
+# Use typed functions - annotations enable specialization
+result: int = add(10, 20)  # int + int -> int, single instruction
+# Compiler/runtime can optimize: no type check at runtime needed
+
+# Inline function with type hint - may be inlined by runtime
+doubled: int = double(result)  # double(int) -> int, * instruction
+
+# Print with f-string: fast string formatting, minimal allocations
+print(f"10 + 20 = {result}, doubled = {doubled}")

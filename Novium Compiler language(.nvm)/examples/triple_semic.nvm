@@ -1,0 +1,6 @@
+fn main() void:
+    let x: int = 42
+    let y: int = 100
+    // Triple semicolon bug
+    let z: int = x + y; ; ;
+    print(z)

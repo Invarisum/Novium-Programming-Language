@@ -1,0 +1,58 @@
+# Novium Function Definition Patterns for AI Code Generation
+
+## Basic Function Template
+
+```novium
+fn <name>(<param1>: <type1>, <param2>: <type2>) <return_type>:
+    <!-- body with proper ownership -->
+    return <value>
+```
+
+## Ownership-Aware Function
+
+```novium
+// Primitives copy automatically
+fn add(a: int, b: int) int:
+    return a + b  // a and b are copies; both still valid after call
+
+// Complex types move by default
+fn process_data(own s: string) void:
+    // s has been transferred; cannot use original after call
+    print(${s})
+
+// Use & for borrows when you need to keep original
+fn process_ref(s: &string) void:
+    print(${*s})  // Dereference; original s still valid
+```
+
+## Error Handling Pattern
+
+```novium
+fn safe_divide(a: int, b: int) optional int:
+    if b == 0:
+        return none
+    return some(a / b)
+```
+
+## API Endpoint Pattern
+
+```novium
+#[get("/users")]
+#[description("List all users")]
+#[response(200, {"users": list[string]})]
+#[tag("Users")]
+fn list_users() string:
+    return json_serialize(user_list)
+```
+
+## Concurrency Pattern
+
+```novium
+async fn main() void:
+    let results: list[int] = await_all(
+        compute(1),
+        compute(2),
+        compute(3)
+    )
+    // All tasks awaited; resources cleaned up
+```

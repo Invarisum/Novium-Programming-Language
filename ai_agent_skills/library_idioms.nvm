@@ -1,0 +1,79 @@
+# Novium Standard Library Idioms for AI Code Generation
+
+## Math Module (math.nvm)
+
+### Constants
+```novium
+let pi: float = PI       // 3.14159...
+let e: float = E         // 2.71828...
+```
+
+### Common Functions
+```novium
+// Absolute value
+let abs_val: int = abs(-5)   // 5
+let abs_float: float = abs(-3.5)  // 3.5
+
+// Signum
+let s: int = signum(-3)   // -1
+let s0: int = signum(0)   // 0
+let s3: int = signum(3)   // 1
+
+// Square root
+let sqrt_val: float = sqrt(16.0)  // 4.0
+
+// Trig (radians)
+let sin_val: float = sin(0.5)
+let cos_val: float = cos(1.0)
+let tan_val: float = tan(0.5)
+```
+
+### Power and Logarithm
+```novium
+let pow_val: float = pow(2.0, 8.0)   // 256.0
+let sqrt2: float = sqrt(2.0)         // 1.414...
+let log_val: float = log(10.0)       // natural log
+let log10_val: float = log10(100.0)  // base-10 log
+```
+
+## String Module (string.nvm)
+
+### Length and Case
+```novium
+let len: int = str_len("hello")    // 5
+let upper: string = to_upper("hello")  // "HELLO"
+let lower: string = to_lower("HELLO")  // "hello"
+```
+
+### Substring and Search
+```novium
+let contains: bool = str_contains("hello world", "world")  // true
+let starts_with: bool = str_starts_with("hello", "hel")    // true
+let ends_with: bool = str_ends_with("hello", "lo")        // true
+```
+
+### HTML Escaping (critical for .nvw)
+```novium
+let escaped: string = html_escape("<script>alert('xss')</script>")
+// <script>alert('xss')</script>
+```
+
+## Vector Module (std/vector)
+
+### Creation and Basic Operations
+```novium
+let nums: vector[int] = new_vector[int]()
+push(nums, 1)
+push(nums, 2)
+push(nums, 3)
+
+let last: int = pop(nums)       // removes and returns last element (3)
+let found: bool = contains(nums, 1)  // true
+let size: int = nums.len()      // current size
+```
+
+### Iteration
+```novium
+for each: int in nums:
+    print(${each})
+```

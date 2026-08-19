@@ -1,0 +1,30 @@
+# Build artifacts
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE and editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# C++-specific
+*.o
+*.obj
+*.gcno
+*.gcda
+*.ll
+*.bc
+
+# CMake
+CMakeCache.txt
+cmake_install.cmake
+
+# Misc
+*.tmp
+*.temp
+.DS_Store

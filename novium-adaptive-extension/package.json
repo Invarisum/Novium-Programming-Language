@@ -1,0 +1,126 @@
+{
+  "name": "novium-adaptive-extension",
+  "displayName": "Novium Adaptive Toolchain",
+  "description": "Zero-config, self-optimizing Novium toolchain that auto-detects hardware, prevents dependency conflicts, and compiles blazingly fast for any target (CPU/WASM/CUDA).",
+  "version": "1.0.0",
+  "publisher": "novium-lang",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Linters",
+    "Formatters",
+    "Debuggers"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "novium-adaptive.initialize",
+        "title": "Novium: Initialize Adaptive Toolchain",
+        "category": "Novium"
+      },
+      {
+        "command": "novium-adaptive.optimize",
+        "title": "Novium: Optimize for Current Hardware",
+        "category": "Novium"
+      },
+      {
+        "command": "novium-adaptive.diagnose",
+        "title": "Novium: Diagnose & Fix Issues",
+        "category": "Novium"
+      },
+      {
+        "command": "novium-adaptive.build",
+        "title": "Novium: Build for Target",
+        "category": "Novium"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Novium Adaptive",
+      "properties": {
+        "novium.adaptive.autoDetectHardware": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect and configure for CPU/GPU/RAM"
+        },
+        "novium.adaptive.target": {
+          "type": "string",
+          "enum": ["auto", "native", "wasm", "cuda", "gpu"],
+          "default": "auto",
+          "description": "Compilation target"
+        },
+        "novium.adaptive.optimizationLevel": {
+          "type": "string",
+          "enum": ["speed", "size", "balanced"],
+          "default": "speed",
+          "description": "Optimization priority"
+        },
+        "novium.adaptive.strictDependencyResolution": {
+          "type": "boolean",
+          "default": true,
+          "description": "Fail on any version conflict"
+        },
+        "novium.adaptive.cudaArch": {
+          "type": "string",
+          "enum": ["auto", "sm_70", "sm_75", "sm_80", "sm_86", "sm_89", "sm_90"],
+          "default": "auto",
+          "description": "CUDA compute capability"
+        },
+        "novium.adaptive.parallelJobs": {
+          "type": "number",
+          "default": 0,
+          "description": "Parallel build jobs (0 = auto-detect CPU cores)"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "novium-adaptive.initialize",
+        "key": "ctrl+alt+n",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "novium-adaptive.build",
+        "key": "ctrl+shift+b",
+        "when": "editorTextFocus"
+      }
+    ],
+    "languages": [
+      {
+        "id": "novium",
+        "extensions": [".nvm", ".nvi", ".nvw"],
+        "aliases": ["Novium", "novium"],
+        "configuration": "./configs/novium-language.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "novium",
+        "scopeName": "source.novium",
+        "path": "./syntaxes/novium.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0",
+    "vsce": "^2.15.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/novium-lang/novium-adaptive-extension"
+  },
+  "license": "MIT"
+}

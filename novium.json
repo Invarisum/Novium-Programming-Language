@@ -1,0 +1,13 @@
+{
+  "build": {
+    "profile": "debug",
+    "target": "native"
+  },
+  "c_dependencies": [],
+  "dependencies": {
+    "core": "*"
+  },
+  "edition": "2026",
+  "name": "test-app",
+  "version": "0.1.0"
+}

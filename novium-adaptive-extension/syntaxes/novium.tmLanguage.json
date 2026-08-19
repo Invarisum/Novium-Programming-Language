@@ -1,0 +1,151 @@
+{
+  "name": "Novium",
+  "scopeName": "source.novium",
+  "fileTypes": ["nvm", "nvi", "nvw"],
+  "injectionSelector": "L:source.novium - comment - string",
+  "patterns": [
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#attributes"
+    },
+    {
+      "include": "#interpolation"
+    }
+  ],
+  "repository": {
+    "keywords": {
+      "patterns": [
+        {
+          "match": "\\b(fn|if|else|elif|match|return|let|var|const|void|int|float|string|bool|true|false|null|none|optional|own|async|await|import|export|struct|interface|class|impl|trait|enum|mod|use|as|where|for|while|loop|break|continue|in|of|try|catch|throw|finally|mut|ref|move|copy|clone|drop|async|await|yield|type|alias|pub|priv|static|const|default|override|final|abstract|virtual|inline|extern|unsafe|asm|link|naked|no_mangle|thread_local|static_assert|constexpr|consteval|constinit|requires|concept|template|typename|export|module|import|coroutine|co_await|co_yield|co_return)\\b",
+          "name": "keyword.control.novium"
+        },
+        {
+          "match": "\\b(self|super|this)\\b",
+          "name": "variable.language.novium"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "match": "\\b(i8|i16|i32|i64|i128|u8|u16|u32|u64|u128|f32|f64|bool|char|str|string|void|usize|isize)\\b",
+          "name": "storage.type.primitive.novium"
+        },
+        {
+          "match": "\\b(Vec|VecDeque|HashMap|HashSet|BTreeMap|BTreeSet|Option|Result|Box|Rc|Arc|RefCell|Mutex|RwLock|String|Path|PathBuf|File|DirEntry|SystemTime|Instant|Duration|Range|RangeInclusive|RangeFrom|RangeTo|RangeToInclusive|RangeFull)\\b",
+          "name": "storage.type.generic.novium"
+        },
+        {
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b",
+          "name": "storage.type.user.novium"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "include": "#interpolation" },
+            { "match": "\\\\.", "name": "constant.character.escape.novium" }
+          ],
+          "name": "string.quoted.double.novium"
+        },
+        {
+          "begin": "r\"",
+          "end": "\"",
+          "name": "string.quoted.raw.novium"
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "match": "//.*$",
+          "name": "comment.line.double-slash.novium"
+        },
+        {
+          "begin": "/\\*",
+          "end": "\\*/",
+          "name": "comment.block.novium"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "match": "\\b0[xX][0-9a-fA-F]+\\b",
+          "name": "constant.numeric.hex.novium"
+        },
+        {
+          "match": "\\b0[bB][01]+\\b",
+          "name": "constant.numeric.binary.novium"
+        },
+        {
+          "match": "\\b0[oO][0-7]+\\b",
+          "name": "constant.numeric.octal.novium"
+        },
+        {
+          "match": "\\b(\\d+\\.\\d*|\\.\\d+)([eE][+-]?\\d+)?\\b",
+          "name": "constant.numeric.float.novium"
+        },
+        {
+          "match": "\\b\\d+\\b",
+          "name": "constant.numeric.integer.novium"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "match": "[+\\-*/%=<>!&|^~]+",
+          "name": "keyword.operator.novium"
+        },
+        {
+          "match": "[.,;:(){}\\[\\]]",
+          "name": "punctuation.novium"
+        }
+      ]
+    },
+    "attributes": {
+      "patterns": [
+        {
+          "match": "#\\[[^\\]]*\\]",
+          "name": "meta.attribute.novium"
+        },
+        {
+          "match": "@[a-zA-Z_][a-zA-Z0-9_]*",
+          "name": "meta.decorator.novium"
+        }
+      ]
+    },
+    "interpolation": {
+      "patterns": [
+        {
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "patterns": [{ "include": "$self" }],
+          "name": "meta.interpolation.novium"
+        }
+      ]
+    }
+  }
+}

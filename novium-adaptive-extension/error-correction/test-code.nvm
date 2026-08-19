@@ -1,0 +1,58 @@
+// ============================================================================
+// Test Novium code with various intentional bugs for error correction
+// ============================================================================
+
+// Bug 1: Unused variable (should be fixed by error corrector)
+fn main() void:
+    let x: int = 42
+    let y: int = 100
+    // y is never used - should be flagged and potentially removed
+    print("Hello, Novium!")
+    print("Value: ${x}")
+
+// Bug 2: Triple semicolon (syntax error)
+fn compute(x: int, y: int) int:
+    result := x + y; ; ;
+    return result
+
+// Bug 3: Missing semicolon in return
+fn factorial(n: int) int:
+    if n <= 1:
+        return n
+    return n * factorial(n - 1)
+
+// Bug 4: Unused import pattern
+fn unused_var() void:
+    let a: int = 10
+    let b: int = 20
+    let c: int = a + b
+    // c is never used - should be flagged
+
+// Bug 5: Misplaced brace
+fn test_braces() void:
+    if true:
+        print("Inside if")
+    print("Outside if")  // Should this be inside or outside?
+
+// Bug 6: Double definition (should be resolved)
+let x: int = 5
+let x: int = 10  // Redefinition - should be flagged
+
+// Bug 7: Missing return type
+fn greet(name: string) void:
+    print("Hello, ${name!")
+    // Missing closing paren and return type
+
+// Bug 8: Infinite loop detection
+fn maybe_infinite() void:
+    while true:
+        print("Looping...")
+        break  // Should have break to avoid infinite loop
+
+fn main() void:
+    print("Starting test program")
+    let a: int = 10
+    let b: int = 20
+    let result: int = compute(a, b)
+    print("Result: ${result}")
+    greet("User")

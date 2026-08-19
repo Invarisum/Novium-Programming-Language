@@ -1,0 +1,19 @@
+# hello.nvm — a parser-valid Novium example
+
+fn greet(name: string) -> void:
+    print(name)
+
+fn add(a: int, b: int) -> int:
+    return a + b
+
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn main() -> void:
+    let message: string = "Hello from Novium"
+    greet(message)
+    let result: int = add(10, 20)
+    let doubled: int = double(result)
+    print(result)
+    print(doubled)

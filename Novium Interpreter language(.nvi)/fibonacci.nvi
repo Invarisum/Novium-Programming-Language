@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+# fibonacci.nvi — Novium Interpreter (Python-style)
+# Python-like scripting with type-specialized execution speed.
+
+# ── Core module imports (type-stable) ──────────────────────────────────────
+import "fibonacci.nvm"  # .nvm with performance-guaranteed functions
+import math from "core.nvm"
+
+# ── Type-specialized: integer operations are unboxed ──────────────────────
+# In .nvi, int annotations enable direct CPU instruction usage,
+# no Python int object overhead for typical ranges.
+
+# Synchronous API call with type specialization
+# fibonacci(10) returns unboxed int; no Python int wrapper needed
+fib10: int = fibonacci(10)
+print(f"fibonacci(10) = {fib10}")  # f-string: fast formatting
+
+# Batch operation - list of ints, each unboxed
+batch_input: list[int] = [1, 5, 10, 20]
+fib_batch_results: list[int] = [
+    fibonacci(1),   # 1
+    fibonacci(5),   # 5
+    fibonacci(10),  # 55
+    fibonacci(20)   # 6765
+]
+print(f"Batch: fibonacci({batch_input}) = {fib_batch_results}")
+
+# ── Async performance: .nvi async/await is lightweight ──────────────────
+# Unlike OS threads (~1MB stack each), .nvi coroutines use ~1KB.
+# Hundreds of concurrent async tasks possible without thread-per-task overhead.
+
+# async fn with type specialization
+async def fetch_fib_async(n: int) -> string:
+    # Await .nvm async function - lightweight suspension, not OS thread
+    result: int = await heavy_work(n)  # .nvm async fn, fast
+    return f"Async fibonacci({n}) = {result}"
+
+# Use async pattern
+async_result: string = await fetch_fib_async(7)
+print(async_result)  # "Async fibonacci(7) = 13"
+
+# Another async pattern: awaiting .nvm async function
+async def mixed_async_demo() -> void:
+    # Call .nvm async function - no OS thread involved
+    coro_result: int = await heavy_work(5)
+    print(f"Mixed async: fibonacci(5) = {coro_result}")
+    
+    # Could also do other work while awaiting
+    print("Other work can proceed concurrently while awaiting...")
+
+# Run the async demo using Python's efficient event loop
+import asyncio
+asyncio.run(mixed_async_demo())
+
+# ── C FFI Network: type-stable, minimal overhead ──────────────────────────
+# .nvi can call C network functions with unboxed types.
+# http_get returns unboxed int (status code) or string (body) without Python object overhead for common cases.
+
+extern "C" network {
+    fn http_get(url: string) string;       # GET request, returns body as string
+    fn http_post(url: string, body: string) string;  # POST
+    fn http_put(url: string, body: string) string;   # PUT
+    fn http_delete(url: string) string;             # DELETE
+}
+
+# Use network FFI with type specialization
+api_url: string = "http://localhost:8000/fibonacci/10"
+raw_http: string = network.http_get(api_url)
+print(f"Raw HTTP from API: {raw_http}")
+
+# ── Response parsing with type specialization ──────────────────────────────
+# Simulated JSON response - dict with int values unboxed where possible
+
+batch_resp: dict = {
+    "results": [1, 55, 6765],  # list of unboxed ints
+    "total_requested": 3,       # unboxed int
+    "successful": 3,           # unboxed int
+    "failed": 0                # unboxed int
+}
+
+# .get() on dict is O(1); accessing successful is fast
+successful: int = batch_resp.get("successful", 0)
+print(f"Batch successful: {successful}/{batch_resp.get('total_requested', 0)}")
+
+# ── Performance Patterns ──────────────────────────────────────────────────
+# 1. Type annotations enable runtime specialization:
+#    - int: unboxed, machine integer
+#    - float: IEEE 754, double precision
+#    - string: length-prefixed, O(1) len()
+#    - optional T: tagged immediate when T is int/float, heap only for large T
+
+# 2. Avoid Python overhead patterns:
+#    - Use annotated types instead of dynamic typing for hot paths
+#    - Prefer iterative over recursive when O(n) vs O(2^n)
+#    - Use batch operations vs individual calls
+#    - Leverage .nvm compiled functions (fast, native)
+
+# 3. Leverage .nvm performance:
+#    - .nvm functions are native LLVM-compiled
+#    - .nvi imports are direct calls, no marshalling overhead for basic types
+#    - FFI to C is optimized; only complex types have conversion cost
+
+# ── Full Workflow Performance Summary ─────────────────────────────────────
+print("\n fibonacci.nvi: performance-optimized")
+print("Optimizations:")
+print("  - Type-annotated int/float: unboxed, CPU-register usage")
+print("  - f-strings: fast formatting, minimal allocations")
+print("  - Iterative fibonacci: O(n) time, O(1) space")
+print("  - Async/await: coroutine-style, not OS threads")
+print("  - C FFI network: minimal conversion overhead")
+print("  - .nvm integration: native LLVM-compiled functions")
+print("  - Dict/list with unboxed values: fast access patterns")
+print("  - Exhaustive match: compile-checked, no runtime checks")

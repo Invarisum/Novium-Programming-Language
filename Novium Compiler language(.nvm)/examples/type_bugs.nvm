@@ -1,0 +1,4 @@
+fn main() void:
+    let x: string = 42  # type mismatch: int to string
+    let y: int = "hello"  # type mismatch: string to int
+    print("hello")

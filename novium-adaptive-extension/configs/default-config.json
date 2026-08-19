@@ -1,0 +1,19 @@
+{
+  "novium.adaptive.autoDetectHardware": true,
+  "novium.adaptive.target": "auto",
+  "novium.adaptive.optimizationLevel": "speed",
+  "novium.adaptive.strictDependencyResolution": true,
+  "novium.adaptive.cudaArch": "auto",
+  "novium.adaptive.parallelJobs": 0,
+  "novium.adaptive.enableIncrementalBuild": true,
+  "novium.adaptive.enableLockfile": true,
+  "novium.adaptive.enableRemoteCache": false,
+  "novium.adaptive.remoteCacheUrl": "",
+  "novium.adaptive.sanitizers": ["address", "undefined"],
+  "novium.adaptive.lto": "thin",
+  "novium.adaptive.debugInfo": true,
+  "novium.adaptive.warningsAsErrors": false,
+  "novium.adaptive.formatOnSave": true,
+  "novium.adaptive.organizeImportsOnSave": true,
+  "novium.adaptive.codeActionsOnSave": ["source.fixAll", "source.organizeImports"]
+}

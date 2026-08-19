@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json.schemastore.org/css",
+  "name": "Novium Web (.nvw)",
+  "fileextensions": [".nvw"],
+  "patternSyntaxes": ["jsx"],
+  "scopeName": "source.nvw",
+  "contextFreeGrammar": {
+    "comment": "//",
+    "variations": {
+      "jsxAttribute": {
+        "pattern": /\\b[a-zA-Z_][a-zA-Z0-9_-]*\\s*:\\s*[\"'][^\"']*[\"']/,
+        "style": "variable"
+      },
+      "jsxTag": {
+        "pattern": /<[a-zA-Z][\\w-]*(?:\\s[a-zA-Z_][\\w-]*=\"[^\"]*\")*\\s*\\/?>/,
+        "style": "tag"
+      },
+      "jsxExpression": {
+        "pattern": /\\{\\s*\\$/,
+        "style": "embedded"
+      }
+    }
+  },
+  "tokens": {
+    "root": [
+      {
+        "include": "#comments",
+        "token": "comment"
+      },
+      {
+        "include": "#strings",
+        "token": "string"
+      },
+      {
+        "include": "#numbers",
+        "token": "number"
+      },
+      {
+        "include": "#attributes",
+        "token": "attribute"
+      },
+      {
+        "include": "#tags",
+        "token": "tag"
+      },
+      {
+        "include": "#embedded",
+        "token": "embedded"
+      }
+    ],
+    "comments": [
+      {
+        "match": "//.*",
+        "token": "comment.line.double-slash.nvw"
+      },
+      {
+        "match": "/\\*",
+        "token": "comment.block.nvw",
+        "next": "blockComment"
+      }
+    ],
+    "blockComment": [
+      {
+        "match": "\\*/",
+        "token": "comment.block.nvw",
+        "next": "#pop"
+      },
+      {
+        "match": "[^]",
+        "token": "comment.block.nvw"
+      }
+    ],
+    "strings": [
+      {
+        "match": "\"[^"]*\"",
+        "token": "string.quoted.double.nvw"
+      },
+      {
+        "match": "'[^']*'",
+        "token": "string.quoted.single.nvw"
+      }
+    ],
+    "numbers": [
+      {
+        "match": "\\b0[xX][0-9a-fA-F]+\\b",
+        "token": "constant.numeric.hex.nvw"
+      },
+      {
+        "match": "\\b\\d+\\.?\\d*(?:e[+-]?\\d+)?\\b",
+        "token": "constant.numeric.nvw"
+      }
+    ],
+    "attributes": [
+      {
+        "match": "\\b[a-zA-Z_][a-zA-Z0-9_-]*\\s*:\\s*[\"'][^\"']*[\"']",
+        "token": "attribute.name.nvw"
+      }
+    ],
+    "tags": [
+      {
+        "match": "<Component",
+        "token": "tag.nvw.open"
+      },
+      {
+        "match": "<\\/[a-zA-Z][\\w-]*>",
+        "token": "tag.nvw.close"
+      },
+      {
+        "match": "<[a-zA-Z][\\w-]*(?:\\s[a-zA-Z_][\\w-]*=\"[^\"]*\")*\\s*\\/?>",
+        "token": "tag.nvw.self-closing"
+      }
+    ],
+    "embedded": [
+      {
+        "match": "\\$\\{",
+        "token": "punctuation.embedded.nvw",
+        "next": "interpolation"
+      }
+    ],
+    "interpolation": [
+      {
+        "match": "\\}",
+        "token": "punctuation.embedded.nvw",
+        "next": "#pop"
+      },
+      {
+        "include": "#expressions"
+      }
+    ]
+  }
+}
