@@ -35,10 +35,6 @@ cmake -B build -S . -G "Ninja"
 cmake --build build
 ```
 
-### Pre-built Binaries
-
-Download pre-compiled binaries from the [Releases page](https://github.com/novium-lang/novium/releases).
-
 ## 🎯 Feature Matrix (Sprints 1-15)
 
 | Sprint | Feature | Status |
@@ -220,7 +216,7 @@ Embed in HTML:
 - **Tutorial**: `full-on learn guide.md` - Step-by-step learning guide
 
 ## 📄 Documentation Files
- 
+
 | File | Description |
 |------|-------------|
 | `README.md` | This file - comprehensive project overview |
@@ -228,41 +224,26 @@ Embed in HTML:
 | `full-on learn guide.md` | Step-by-step learning guide |
 | `novium.json` | Project configuration (`name`, `version`, `edition`, `dependencies`) |
 | `BUG_FIXES_REPORT.md` | 25 bugs fixed with severity, patches, verification |
-| `SPRINT_16-18_PLAN.md` | 6-week roadmap: Runtime → Concurrency → Ecosystem |
+| `SPRINT_16-18_PLAN.md` | 6-week roadmap: C Backend → C ABI → LLVM |
 
 ## 🐛 Known Limitations
- 
+
 - LLVM requires `llvm-config` or vcpkg integration for full native compilation
 - Full ownership enforcement is in progress (Sprint 3 ongoing enhancement)
 - Async coroutine suspension/resume requires runtime support
 - C++/Rust/Python parsers are skeletons - fully functional parsers would require significant additional work
 - Package registry is simulated - remote registry integration pending
- 
+
 ## 🔧 Recent Fixes (Post-Sprint 15)
- 
+
 - **25 bugs fixed** across lexer, parser, type checker, interpreter, symbol table
 - Critical: Duplicate functions, level counter mismatch, invalid SourceLocation
 - High: Parser error recovery, dangerous static_cast, &mut parameter parsing, string interpolation nesting, async Go statements
 - Medium: Tab rejection, trailing underscore validation, ownership stubs
 - Full details: [`BUG_FIXES_REPORT.md`](BUG_FIXES_REPORT.md)
- 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/foo`)
-3. Commit changes (`git commit -am 'Add foo feature'`)
-4. Push to branch (`git push origin feature/foo`)
-5. Create a Pull Request
-
-Follow the coding conventions in the existing codebase. See `CMakeLists.txt` for build setup and `novium.json` for project configuration.
-
-## 📜 License
-
-Novium is licensed under the [MIT License](LICENSE) - see the LICENSE file for details.
 
 ---
- 
+
 *Novium Programming Language Ecosystem - Version 0.1.5 (v0.2.0-beta, August 2026)*
 *25 bugs fixed post-Sprint 15 — see [BUG_FIXES_REPORT.md](BUG_FIXES_REPORT.md) and [SPRINT_16-18_PLAN.md](SPRINT_16-18_PLAN.md)*
-*Aligned with [v0.1 roadmap](Novium%20Compiler%20language(.nvm)/docs/v0.1-roadmap.md) — next: portable C backend*#   N o v i u m - P r o g r a m m i n g - L a n g u a g e  
- 
+*Aligned with [v0.1 roadmap](Novium%20Compiler%20language(.nvm)/docs/v0.1-roadmap.md) — next: portable C backend*
