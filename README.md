@@ -243,6 +243,10 @@ Embed in HTML:
 - Full details: [`BUG_FIXES_REPORT.md`](BUG_FIXES_REPORT.md)
 
 ---
+##Thank you & Acknowledgment
+**Our Lead Developer for this project**: Molor Davaa (@UchihaMolsyh)
+- Thank you for developing this project solo and making it this far.
+---
 
 *Novium Programming Language Ecosystem - Version 0.1.5 (v0.2.0-beta, August 2026)*
 *25 bugs fixed post-Sprint 15 — see [BUG_FIXES_REPORT.md](BUG_FIXES_REPORT.md) and [SPRINT_16-18_PLAN.md](SPRINT_16-18_PLAN.md)*
