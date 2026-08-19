@@ -243,7 +243,7 @@ Embed in HTML:
 - Full details: [`BUG_FIXES_REPORT.md`](BUG_FIXES_REPORT.md)
 
 ---
-##Thank you & Acknowledgment
+## Thank you & Acknowledgment
 
 **Our Lead Developer for this project**: Molor Davaa (@UchihaMolsyh)
 - Thank you for developing this project solo and making it this far.
