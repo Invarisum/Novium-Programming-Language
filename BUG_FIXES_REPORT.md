@@ -1,7 +1,7 @@
 # Novium Programming Language - Bug Fixes Report
 
 **Date:** August 2026  
-**Version:** 0.2 (Post-Sprint 15)  
+**Version:** 0.1.5 (v0.2.0-beta, Post-Sprint 15)  
 **Status:** All Critical/High severity bugs fixed
 
 ---

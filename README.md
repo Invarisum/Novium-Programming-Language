@@ -1,8 +1,10 @@
 # Novium Programming Language Ecosystem
 
-## 🚀 Production-Ready Language Implementation (15 Sprints Complete)
+## 🚀 v0.1.5 (v0.2.0-beta) — Runtime Foundations Complete
 
 Novium is a multi-paradigm systems programming language exploring high-performance computing, dynamic orchestration, and web development.
+
+> **Roadmap Alignment:** This release corresponds to **Sprint 15 complete** per [v0.1-roadmap.md](Novium%20Compiler%20language(.nvm)/docs/v0.1-roadmap.md). Next: portable C backend (v0.1.6).
 
 ## 📦 Ecosystem Overview
 
@@ -260,6 +262,7 @@ Novium is licensed under the [MIT License](LICENSE) - see the LICENSE file for d
 
 ---
  
-*Novium Programming Language Ecosystem - Version 0.2.1 (August 2026)*
-*25 bugs fixed post-Sprint 15 — see [BUG_FIXES_REPORT.md](BUG_FIXES_REPORT.md) and [SPRINT_16-18_PLAN.md](SPRINT_16-18_PLAN.md)*#   N o v i u m - P r o g r a m m i n g - L a n g u a g e  
+*Novium Programming Language Ecosystem - Version 0.1.5 (v0.2.0-beta, August 2026)*
+*25 bugs fixed post-Sprint 15 — see [BUG_FIXES_REPORT.md](BUG_FIXES_REPORT.md) and [SPRINT_16-18_PLAN.md](SPRINT_16-18_PLAN.md)*
+*Aligned with [v0.1 roadmap](Novium%20Compiler%20language(.nvm)/docs/v0.1-roadmap.md) — next: portable C backend*#   N o v i u m - P r o g r a m m i n g - L a n g u a g e  
  

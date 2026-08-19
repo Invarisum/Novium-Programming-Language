@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(novium-compiler VERSION 0.1.0 LANGUAGES CXX)
+project(novium-compiler VERSION 0.1.5 LANGUAGES CXX)
 
 # ── C++ Standard ──────────────────────────────────────────────────────────────
 # C++17 gives us: std::optional, std::string_view, structured bindings,
