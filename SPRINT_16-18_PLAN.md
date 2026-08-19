@@ -1,187 +1,211 @@
-# Novium Sprints 16-18 Plan (v0.1.6 → v0.2.0)
+# Novium Sprints 16-18 Plan (v0.1.6 → v0.3.0)
 
 **Current:** Sprint 15 Complete — **v0.1.5 (v0.2.0-beta)** released  
 **Roadmap:** [v0.1-roadmap.md](Novium%20Compiler%20language(.nvm)/docs/v0.1-roadmap.md)  
-**Target:** 3 Sprints × 2 Weeks = 6 Weeks to v0.2.0 (stable native core)
+**Target:** 3 Sprints × 2 Weeks = 6 Weeks to v0.3.0 (SDK + Cross-Language + Production)
 
 ---
 
-## 🏁 Sprint 16: Portable C Backend (v0.1.6) — Week 1-2
-**Goal:** Emit portable C as first native backend — "keeps generated output inspectable and lets Novium call mature C APIs immediately"
+## 🎯 Vision: Novium as a Systems Language Platform
+
+> **Goal:** Make Novium the best "glue language" for systems programming — combining Python ergonomics with C performance, cross-language interop, and a genuine SDK ecosystem.
+
+```
+         +-------------------+       +-------------------+
+         |   Python Scripts|       |   C/C++ Projects  |
+         +--------+----------+       +--------+----------+
+                  \              /
+                   \            /
+                    \          /
+                     \        /
+          +-----------------+-----------------+
+          |                 |                 |
+          |   Novium        |    Mojo         |
+          |   Programs      |   Interop       |
+          |   (Safe, Fast)  |   (Python+)     |
+          +-----------------+-----------------+
+                   ^                  ^
+                   |                  |
+                   +----------+-------+
+                                |
+                            SDK & Tooling
+```
+
+---
+
+## 🏁 Sprint 16: SDK Foundations (v0.1.7) — Week 1-2
+**Goal:** Build the Novium SDK — libraries, headers, build integration, and Moji
 
 ### Must-Have (P0)
 | Task | File | Est. | Owner |
 |------|------|------|-------|
-| C codegen: emit `.c` + `.h` from AST (no LLVM) | `codegen/c_codegen.cpp` (new) | 4d | |
-| Type mapping: Novium → C (int→int64_t, string→struct, slices→ptr+len) | `codegen/c_codegen.cpp` | 2d | |
-| Runtime C library: `novium_rt.c/h` (alloc, panic, print, slices) | `runtime/novium_rt.c` (new) | 2d | |
-| `--emit=c` CLI flag + `novium build --target=c` | `main.cpp` + CMake | 1d | |
-| Struct layout: `#[repr(C)]` compatible, no padding surprises | `codegen/c_codegen.cpp` | 1d | |
+| C ABI type map doc: every Novium type → C type | `docs/c_abi.md` (new) | 2d | |
+| Novium → C header generation: `novium build --header` | `c_codegen.cpp` | 1d | |
+| Novium → Moji bridge: `import moji` + `fn c_call() -> int` | `parser.cpp` + new `moji_bridge.cpp` | 3d | |
+| SDK `include/novium.h`: all types, macros, calling convention | `src/sdk/novium.h` (new) | 2d | |
+| `--sdk` CLI: emit SDK package (headers + lib + cmake config) | `main.cpp` + CMake | 1d | |
+| Build: `novium sdk` → `novium-sdk-v0.1.7/` with all artifacts | `CMakeLists.txt` | 1d | |
 
 ### Should-Have (P1)
 | Task | File | Est. |
 |------|------|------|
-| Compile & run `examples/hello.nvm` via `gcc -o hello hello.c novium_rt.c` | `examples/` | 1d |
-| Array/slice/string operations in C runtime | `runtime/novium_rt.c` | 1d |
-| Basic `extern "C"` import support (call C from Novium) | `parser.cpp` + `c_codegen.cpp` | 2d |
+| Moji `fn` → Novium `fn` auto-translation (type mapping) | `moji_bridge.cpp` | 2d |
+| C → Novium `extern "C"` import stubs | `parser.cpp` | 1d |
+| CMake `find_package(novium)` integration | `CMakeLists.txt` | 2d |
+| `novium-sdk.pc` (pkg-config) for easy C/C++ linking | `tools/sdk/pkgconfig/` (new) | 1d |
 
 ### Stretch (P2)
 | Task | File | Est. |
 |------|------|------|
-| Cross-compilation flags: `--target=arm64`, `--target=wasm32` (via C) | `CMakeLists.txt` | 2d |
+| Rust `extern "C"` ↔ Novium FFI generator | `tools/ffi/` (new) | 3d |
+| Swift bridging support | `tools/bridges/` (new) | 3d |
 
 ### Definition of Done
-- [ ] `novium build --target=c hello.nvm` → `hello.c` + `hello.h`
-- [ ] `gcc hello.c novium_rt.c -o hello` runs and prints "Hello from Novium"
-- [ ] Structs, arrays, slices, strings work in emitted C
-- [ ] Can call `novium` functions from C `main()`
+- [ ] `novium sdk` generates `include/novium.h`, `libnovium.a`, `novium-sdk.cmake`
+- [ ] `cargo new --type novium` or equivalent scaffold works
+- [ ] `#include <novium.h>` + `gcc test.c novium_rt.c -o test` compiles + runs
+- [ ] `import moji` in Novium works for basic types (int, string, array)
+- [ ] `novium pkg install moji-sdk` hypothetical future flow
 
 ---
 
-## 🏁 Sprint 17: C ABI Layer + Resource Safety (v0.1.7) — Week 3-4
-**Goal:** "`extern "C"` imports/exports, shared-library builds, documented type mapping" + "defer, RAII-style wrappers, explicit unsafe blocks"
+## 🏁 Sprint 17: Mojo Cross-Language + Runtime (v0.2.0) — Week 3-4
+**Goal:** Deep Mojo interop + runtime features that make Novium a true systems language
 
 ### Must-Have (P0)
 | Task | File | Est. |
 |------|------|------|
-| `extern "C"` export: `#[export] fn foo() -> int` → C-callable symbol | `parser.cpp` + `c_codegen.cpp` | 2d |
-| `extern "C"` import: `extern "C" { fn libc_malloc(size) -> *u8 }` | `parser.cpp` + `type_checker.cpp` | 2d |
-| Shared library build: `novium build --shared libfoo.nvm` → `libfoo.so/.dll` | `CMakeLists.txt` + `main.cpp` | 2d |
-| Type mapping doc: `novium.md#c-abi-type-mapping` | `docs/c_abi.md` (new) | 1d |
-| `defer` statement: `defer close(file)` — runs at scope exit | `parser.cpp` + `interpreter.cpp` + `c_codegen.cpp` | 2d |
-| RAII wrapper pattern: `struct File { fd: int; ~File { close(fd) } }` | `examples/raii.nvm` | 1d |
-| `unsafe { ... }` blocks: disable borrow checker locally | `parser.cpp` + `type_checker.cpp` | 2d |
+| Moji FFI: `extern "Mojo"` import of C functions | `parser.cpp` + `moji_bridge.cpp` | 3d |
+| Novium → Moji: compile Novium code from within Moji playground | `moji_bridge.cpp` | 2d |
+| Runtime: `novium_gc` / arena allocation for zero-overhead interop | `runtime/novium_rt.c` | 2d |
+| `defer` + `unsafe` blocks compile for Moji interop code | `parser.cpp` + `type_checker.cpp` | 2d |
+| `novium benchmark` vs Moji hello world | `examples/bench/` | 1d |
 
 ### Should-Have (P1)
 | Task | File | Est. |
 |------|------|------|
-| C header generation: `novium build --header libfoo.nvm` → `libfoo.h` | `c_codegen.cpp` | 1d |
-| `#[no_mangle]` attribute for custom symbol names | `parser.cpp` | 4h |
-| Bindgen integration: `novium bindgen foo.h` → `foo.nvm` | `tools/bindgen/` (new) | 3d |
+| Shared type system: `novium.Int` <-> `mojo.Int` equivalence | `type_checker.cpp` + `moji_bridge.cpp` | 2d |
+| Cross-language test: Novium `fn` called from Moji `fn` and vice versa | `examples/cross_lang.nvm` + Moji test | 2d |
+| `async fn` in Novium awaitable from Moji coroutine | `runtime/async_executor.cpp` | 2d |
 
 ### Stretch (P2)
 | Task | File | Est. |
 |------|------|------|
-| C++ name mangling support (optional) | `migration/migratir.cpp` | 3d |
+| Moji `print()` → Novium `print()` routed through FFI | `moji_bridge.cpp` | 1d |
+| Build: single binary mixing Novium + Moji + C | `CMakeLists.txt` | 2d |
 
 ### Definition of Done
-- [ ] `novium build --shared libfoo.nvm` → `libfoo.so` + `libfoo.h`
-- [ ] C program `#include "libfoo.h"` calls Novium functions
-- [ ] Novium calls `malloc`/`free` via `extern "C"`
-- [ ] `defer` runs on normal return, panic, and unwind
-- [ ] `unsafe` block compiles and runs (borrow checker disabled inside)
+- [ ] Moji `print("hello")` can be called from Novium `go print("hello")`
+- [ ] Novium `fn add(a: int, b: int) -> int` callable from Moji `def add(a: Int, b: Int) -> Int`
+- [ ] No segfaults in cross-language interop baseline cases
+- [ ] `novium bench` numbers published and compared
 
 ---
 
-## 🏁 Sprint 18: LLVM Backend + Stabilization (v0.2.0) — Week 5-6
-**Goal:** "Add LLVM backend only after language semantics and C ABI are stable"
+## 🏁 Sprint 18: SDK & Tooling Generalization (v0.2.1 → v0.3.0) — Week 5-6
+**Goal:** SDK maturity, language-agnostic tooling, and "better things" for developers
 
 ### Must-Have (P0)
 | Task | File | Est. |
 |------|------|------|
-| LLVM IR codegen: revive `codegen.cpp` for native backend | `codegen.cpp` | 4d |
-| `--target=llvm` / `--target=native` CLI flag | `main.cpp` | 1d |
-| Debug info: DWARF emission (line tables, variables) | `codegen.cpp` | 2d |
-| Optimization passes: inlining, DCE, const propagation | `codegen.cpp` | 2d |
-| Self-host: compile compiler with LLVM backend | `CMakeLists.txt` | 1d |
-| Release artifacts: `novium-v0.2.0-{linux,macos,windows}.tar.gz` | `.github/workflows/release.yml` | 1d |
+| SDK: `novium new <name>` project scaffold (like `cargo new`) | `tools/scaffold/` (new) | 2d |
+| SDK: `novium test` runs cross-language tests (Novium + Moji + C) | `tools/test/` (new) | 2d |
+| SDK docs: `novium-sdk.md` — tutorials, FFI guides, migration | `docs/sdk.md` (new) | 3d |
+| `novium migrate` updated: Novium → Moji, Novium → C, C → Novium | `migration/migratir.cpp` | 2d |
+| Windows MSI installer OR `novium windows-x86_64.msi` | `tools/installer/` (new) | 3d |
 
 ### Should-Have (P1)
 | Task | File | Est. |
 |------|------|------|
-| LSP: stabilize on native backend (not interpreter) | `novium_lsp.go` | 2d |
-| Package manager: publish to GitHub Releases | `novium_pkg_manager.py` | 1d |
-| Benchmark suite: `novium bench` vs C/Rust/Go | `examples/bench/` | 2d |
+| SDK: `novium add <pkg>` — local git path + GitHub repo packages | `novium_pkg_manager.py` | 2d |
+| SDK: `novium doc <function>` — quick type docs from AST | `tools/docgen/` (new) | 1d |
+| CI: GitHub Actions matrix (Windows/Linux/Mac, Novium/Moji/C tests) | `.github/workflows/ci.yml` | 2d |
+| `novium fmt` — format source code (like `gofmt`, `rustfmt`) | `tools/fmt/` (new) | 2d |
 
 ### Stretch (P2)
 | Task | File | Est. |
 |------|------|------|
-| WASM target via LLVM: `--target=wasm32` | `web_codegen.cpp` | 2d |
-| Incremental compilation (query engine) | `query_engine.cpp` (new) | 3d |
+| Language-agnostic AST schema (JSON) for inter-tool communication | `ast/schema.json` (new) | 2d |
+| AI-assisted Novium code: `novium suggest` (basic) | `tools/ai/` (new) | 3d |
 
 ### Definition of Done
-- [ ] `novium build --target=native hello.nvm` → `hello` (native binary)
-- [ ] Binary runs without interpreter, links `novium_rt` statically
-- [ ] Debug build works in `lldb` / VS Code (`break main`, step, inspect)
-- [ ] Self-hosted compiler builds and passes all tests
-- [ ] v0.2.0 tagged, released, announced
+- [ ] `novium new my_app` → scaffolded app with Novium + C FFI template
+- [ ] `novium test --cross` runs Novium + Moji + C unit tests
+- [ ] `novium sdk docs` opens browser with FFI guides
+- [ ] `novium fmt` formats 100% of `examples/` without manual edits
+- [ ] Windows installer runs and adds `novium` to PATH
 
 ---
 
-## 📊 Capacity Planning (Roadmap-Aligned)
+## 📊 Capacity Planning (Ambitious but Focused)
 
-| Sprint | Theme | P0 Days | P1 Days | P2 Days | Total | Buffer (20%) |
-|--------|-------|---------|---------|---------|-------|--------------|
-| 16 | Portable C Backend | 10 | 4 | 2 | 16 | 19.2 |
-| 17 | C ABI + Resource Safety | 11 | 3.5 | 3 | 17.5 | 21 |
-| 18 | LLVM Backend + Release | 11 | 5 | 2 | 18 | 21.6 |
+| Sprint | P0 Days | P1 Days | P2 Days | Total | Buffer (15%) |
+|--------|---------|---------|---------|-------|--------------|
+| 16 | 8 | 4 | 3 | 15 | 17.25 |
+| 17 | 8 | 4 | 2 | 14 | 16.1 |
+| 18 | 9 | 4 | 4 | 17 | 19.5 |
 
-**Note:** Sprint 16 is heaviest (new C codegen from scratch). Consider 3-week Sprint 16 if needed.
-
----
-
-## 🎯 Milestone Gates (Per Roadmap)
-
-| Gate | Version | Criteria | Roadmap Step |
-|------|---------|----------|--------------|
-| **C Backend Alpha** | v0.1.6 | `novium build --target=c` works for hello world | Step 2 |
-| **C ABI Beta** | v0.1.7 | Shared libs + `extern "C"` + `defer` + `unsafe` | Step 3, 4 |
-| **LLVM RC1** | v0.2.0-rc1 | Native binary + debug + self-host | Step 5 |
-| **v0.2.0 Stable** | v0.2.0 | All above + release artifacts + benchmarks | — |
+**Critical Path:** Sprint 16 (SDK) → Sprint 17 (Moji interop) → Sprint 18 (maturity/tooling)
 
 ---
 
-## 🔄 Dependencies (Roadmap Order)
+## 🎯 Milestone Gates (Expanded)
+
+| Gate | Version | Criteria | Date |
+|------|---------|----------|------|
+| **SDK Alpha** | v0.1.7 | `novium sdk` generates usable C headers + Moji FFI baseline | Sprint 16 |
+| **Moji Interop Beta** | v0.2.0 | Novium `fn` callable from Moji, no segfaults | Sprint 17 |
+| **SDK RC** | v0.2.1 | `novium new`, `novium test --cross`, `novium fmt` all work | Sprint 18 |
+| **v0.3.0 Stable** | v0.3.0 | Full SDK + interop + tooling + docs + installer | After S18 |
+
+---
+
+## 🔄 Dependencies (Expanded)
 
 ```
-Sprint 16 (C Backend)
-  ├─ C runtime → enables Sprint 17 shared libs
-  ├─ Type mapping → enables Sprint 17 extern "C"
-  └─ Struct layout → enables Sprint 18 LLVM ABI compat
+Sprint 16 (SDK Foundations)
+  ├─ C ABI doc → enables Sprint 17 Moji FFI type mapping
+  ├─ C header gen → enables Sprint 18 SDK distribution
+  ├─ Moji bridge → enables Sprint 17 cross-language calls
+  └─ SDK scaffold → enables Sprint 18 developer onboarding
 
-Sprint 17 (C ABI + Safety)
-  ├─ Shared libs → enables Sprint 18 dynamic linking
-  ├─ defer/RAII → enables safe resource mgmt in LLVM
-  ├─ unsafe blocks → enables low-level LLVM intrinsics
-  └─ C header gen → enables C/C++ interop examples
+Sprint 17 (Mojo Interop)
+  ├─ FFI baseline → enables Sprint 18 cross-language testing
+  ├─ Runtime features → enables Sprint 18 stable SDK
+  └─ Shared types → enables Sprint 18 pkg manager integration
 
-Sprint 18 (LLVM Backend)
-  ├─ Reuses C type mapping / ABI
-  ├─ Reuses novium_rt.c as runtime
-  └─ Emits same calling convention as C backend
+Sprint 18 (SDK & Tooling)
+  ├─ Scaffold → immediate developer value
+  ├─ CI matrix → confidence for 1.0 release
+  └─ `novium fmt` → codebase consistency for long-term
 ```
 
 ---
 
-## 📝 Notes
-
-- **Strict roadmap adherence:** No borrow checker until v0.3+ (roadmap: "separate project")
-- **No package registry** until v0.3+ (roadmap: "should not block native core")
-- **No WASM/web** until v0.3+ (roadmap: "separate project")
-- **C backend is throwaway prototype** — validates semantics before LLVM investment
-- **Self-host is the ultimate test** — compiler compiles itself with LLVM backend
-
----
-
-## 🚀 Quick Start for Sprint 16
+## 🚀 Quick Start for SDK
 
 ```bash
-# 1. Create C codegen skeleton
-mkdir -p "Novium Compiler language(.nvm)/src/codegen"
-touch "Novium Compiler language(.nvm)/src/codegen/c_codegen.{cpp,h}"
+# 1. Install SDK
+novium sdk
 
-# 2. Add to CMakeLists.txt
-# add_library(novium_c_codegen src/codegen/c_codegen.cpp)
+# 2. Create new project
+novium new my_game
 
-# 3. Implement: fn codegen_c(program: &Program) -> String
+# 3. Add C FFI support
+novium add ./my_c_lib
 
-# 4. Test pipeline:
-#    novium --ast examples/hello.nvm      # verify AST
-#    novium --codegen-c examples/hello.nvm # emit hello.c
-#    gcc hello.c novium_rt.c -o hello     # compile
-#    ./hello                              # run
+# 4. Cross-language test
+novium test --cross
+
+# 4. Format code
+novium fmt
+
+# 5. Read docs
+novium sdk docs  # opens browser
 ```
 
 ---
 
-*Aligned with [v0.1-roadmap.md](Novium%20Compiler%20language(.nvm)/docs/v0.1-roadmap.md) — portable C → C ABI → LLVM*
+*Aligned with [v0.1-roadmap.md](Novium%20Compiler%20language(.nvm)/docs/v0.1-roadmap.md) — SDK → Moji interop → Production maturity*
+
+**Note:** Mojo is a trademark of Modular AI. This plan implements compatible FFI, not an official Mojo integration. "Moji" is used as a shortened reference for cross-language interop functionality.
