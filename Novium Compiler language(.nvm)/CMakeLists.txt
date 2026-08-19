@@ -29,6 +29,7 @@ set(NOVIUM_SOURCES
     src/codegen.cpp
     src/web_codegen.cpp
     src/migration/migratir.cpp
+    src/sdk/novium.c
 )
 
 # ── Novium Compiler Library ───────────────────────────────────────────────────
